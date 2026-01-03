@@ -17,6 +17,7 @@ import moment from 'moment'
 import { CopyToClipboard } from 'react-copy-to-clipboard'
 import Meta from './Meta'
 import { getValueRenderer, DefaultValueRenderer } from './ValueRenderers'
+import { dataStore } from './DataStore'
 
 const TIMESTAMP_FORMAT = 'MM/DD HH:mm:ss'
 const TIME_ONLY_FORMAT = 'HH:mm:ss'
@@ -284,9 +285,13 @@ class DataBrowser extends Component {
     }
 
     if (msg.context && msg.updates) {
+      // Push to RxJS DataStore for per-row subscriptions (Step 7)
+      dataStore.pushDelta(msg)
+
       const key =
         msg.context === this.state.webSocket.skSelf ? 'self' : msg.context
 
+      // Also keep setState for initial data load and compatibility (will be removed in Step 8b)
       // Immutable update - build new data and meta objects
       this.setState((prevState) => {
         // Clone existing data and meta for this context
@@ -402,6 +407,10 @@ class DataBrowser extends Component {
   }
 
   componentDidMount() {
+    // Set self context for DataStore normalization
+    if (this.props.webSocket && this.props.webSocket.skSelf) {
+      dataStore.setSelfContext(this.props.webSocket.skSelf)
+    }
     this.fetchSources()
     this.subscribeToDataIfNeeded()
   }
@@ -412,6 +421,8 @@ class DataBrowser extends Component {
 
   componentWillUnmount() {
     this.unsubscribeToData()
+    // Cleanup DataStore subscriptions to prevent memory leaks
+    dataStore.destroy()
   }
 
   handleContextChange(selectedOption) {
