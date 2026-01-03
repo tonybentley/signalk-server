@@ -54,6 +54,103 @@ function fetchSources() {
     })
 }
 
+// Memoized DataRow component - only re-renders when data changes
+const DataRow = React.memo(({
+  pathKey,
+  data,
+  meta,
+  raw,
+  isPaused,
+  selectedSources,
+  onToggleSource
+}) => {
+  const units = meta && meta.units ? meta.units : ''
+
+  return (
+    <tr key={pathKey}>
+      <td className="path-cell">
+        <CopyToClipboardWithFade text={data.path}>
+          <span>
+            {data.path} <i className="far fa-copy"></i>
+          </span>
+        </CopyToClipboardWithFade>
+      </td>
+      <td className="value-cell">
+        {(() => {
+          if (raw) {
+            return (
+              <div>
+                <div className="text-primary">
+                  value:{' '}
+                  {JSON.stringify(data.value, null, 2)}
+                </div>
+                <div className="text-primary">
+                  meta:{' '}
+                  {JSON.stringify(
+                    meta ? meta : {},
+                    null,
+                    2
+                  )}
+                </div>
+              </div>
+            )
+          }
+          const CustomRenderer = getValueRenderer(
+            data.path,
+            meta
+          )
+          if (CustomRenderer) {
+            return (
+              <CustomRenderer
+                value={data.value}
+                units={units}
+                {...meta?.renderer?.options}
+              />
+            )
+          }
+          return (
+            <DefaultValueRenderer
+              value={data.value}
+              units={units}
+            />
+          )
+        })()}
+      </td>
+      <TimestampCell
+        timestamp={data.timestamp}
+        isPaused={isPaused}
+        className="timestamp-cell"
+      />
+      <td className="source-cell">
+        <input
+          type="checkbox"
+          onChange={() => onToggleSource(data.$source)}
+          checked={selectedSources.has(data.$source)}
+          style={{
+            marginRight: '5px',
+            verticalAlign: 'middle'
+          }}
+        />
+        <CopyToClipboardWithFade text={data.$source}>
+          {data.$source} <i className="far fa-copy"></i>
+        </CopyToClipboardWithFade>{' '}
+        {data.pgn || ''}
+        {data.sentence || ''}
+      </td>
+    </tr>
+  )
+}, (prevProps, nextProps) => {
+  // Only re-render if data has changed
+  // Compare timestamp (primary change indicator) and other key props
+  return (
+    prevProps.data.timestamp === nextProps.data.timestamp &&
+    prevProps.data.value === nextProps.data.value &&
+    prevProps.raw === nextProps.raw &&
+    prevProps.isPaused === nextProps.isPaused &&
+    prevProps.selectedSources === nextProps.selectedSources
+  )
+})
+
 class DataBrowser extends Component {
   constructor(props) {
     super(props)
@@ -669,84 +766,18 @@ class DataBrowser extends Component {
                           const data = this.state.data[this.state.context][key]
                           const meta =
                             this.state.meta[this.state.context][data.path]
-                          const units = meta && meta.units ? meta.units : ''
 
                           return (
-                            <tr key={key}>
-                              <td className="path-cell">
-                                <CopyToClipboardWithFade text={data.path}>
-                                  <span>
-                                    {data.path} <i className="far fa-copy"></i>
-                                  </span>
-                                </CopyToClipboardWithFade>
-                              </td>
-                              <td className="value-cell">
-                                {(() => {
-                                  if (this.state.raw) {
-                                    return (
-                                      <div>
-                                        <div className="text-primary">
-                                          value:{' '}
-                                          {JSON.stringify(data.value, null, 2)}
-                                        </div>
-                                        <div className="text-primary">
-                                          meta:{' '}
-                                          {JSON.stringify(
-                                            meta ? meta : {},
-                                            null,
-                                            2
-                                          )}
-                                        </div>
-                                      </div>
-                                    )
-                                  }
-                                  const CustomRenderer = getValueRenderer(
-                                    data.path,
-                                    meta
-                                  )
-                                  if (CustomRenderer) {
-                                    return (
-                                      <CustomRenderer
-                                        value={data.value}
-                                        units={units}
-                                        {...meta?.renderer?.options}
-                                      />
-                                    )
-                                  }
-                                  return (
-                                    <DefaultValueRenderer
-                                      value={data.value}
-                                      units={units}
-                                    />
-                                  )
-                                })()}
-                              </td>
-                              <TimestampCell
-                                timestamp={data.timestamp}
-                                isPaused={this.state.pause}
-                                className="timestamp-cell"
-                              />
-                              <td className="source-cell">
-                                <input
-                                  type="checkbox"
-                                  onChange={() =>
-                                    this.toggleSourceSelection(data.$source)
-                                  }
-                                  checked={this.state.selectedSources.has(
-                                    data.$source
-                                  )}
-                                  style={{
-                                    marginRight: '5px',
-                                    verticalAlign: 'middle'
-                                  }}
-                                />
-                                <CopyToClipboardWithFade text={data.$source}>
-                                  {data.$source} <i className="far fa-copy"></i>
-                                </CopyToClipboardWithFade>{' '}
-                                {data.pgn || ''}
-                                {data.sentence || ''}
-                              </td>
-                            </tr>
+                            <DataRow
+                              key={key}
+                              pathKey={key}
+                              data={data}
+                              meta={meta}
+                              raw={this.state.raw}
+                              isPaused={this.state.pause}
+                              selectedSources={this.state.selectedSources}
+                              onToggleSource={this.toggleSourceSelection}
+                            />
                           )
                         })}
                     </tbody>
