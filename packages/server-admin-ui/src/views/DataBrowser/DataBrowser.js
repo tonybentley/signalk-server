@@ -95,72 +95,77 @@ class DataBrowser extends Component {
       const key =
         msg.context === this.state.webSocket.skSelf ? 'self' : msg.context
 
-      let isNew = false
-      if (!this.state.data[key]) {
-        this.state.data[key] = {}
-        isNew = true
-      }
+      // Immutable update - build new data and meta objects
+      this.setState((prevState) => {
+        // Clone existing data and meta for this context
+        const newDataForContext = { ...(prevState.data[key] || {}) }
+        const newMetaForContext = { ...(prevState.meta[key] || {}) }
 
-      if (!this.state.meta[key]) {
-        this.state.meta[key] = {}
-        isNew = true
-      }
+        msg.updates.forEach((update) => {
+          if (update.values) {
+            const pgn =
+              update.source && update.source.pgn && `(${update.source.pgn})`
+            const sentence =
+              update.source &&
+              update.source.sentence &&
+              `(${update.source.sentence})`
 
-      let context = this.state.data[key]
-      let contextMeta = this.state.meta[key]
+            update.values.forEach((vp) => {
+              const timestamp = moment(update.timestamp)
+              const formattedTimestamp = timestamp.isSame(moment(), 'day')
+                ? timestamp.format(TIME_ONLY_FORMAT)
+                : timestamp.format(TIMESTAMP_FORMAT)
 
-      msg.updates.forEach((update) => {
-        if (update.values) {
-          let pgn =
-            update.source && update.source.pgn && `(${update.source.pgn})`
-          let sentence =
-            update.source &&
-            update.source.sentence &&
-            `(${update.source.sentence})`
-          update.values.forEach((vp) => {
-            const timestamp = moment(update.timestamp)
-            const formattedTimestamp = timestamp.isSame(moment(), 'day')
-              ? timestamp.format(TIME_ONLY_FORMAT)
-              : timestamp.format(TIMESTAMP_FORMAT)
-
-            if (vp.path === '') {
-              Object.keys(vp.value).forEach((k) => {
-                context[k] = {
-                  path: k,
-                  value: vp.value[k],
+              if (vp.path === '') {
+                // Empty path - spread object keys
+                Object.keys(vp.value).forEach((k) => {
+                  newDataForContext[k] = {
+                    path: k,
+                    value: vp.value[k],
+                    $source: update.$source,
+                    pgn,
+                    sentence,
+                    timestamp: formattedTimestamp
+                  }
+                })
+              } else {
+                // Normal path
+                const pathKey = vp.path + '$' + update.$source
+                newDataForContext[pathKey] = {
+                  path: vp.path,
                   $source: update.$source,
+                  value: vp.value,
                   pgn,
                   sentence,
                   timestamp: formattedTimestamp
                 }
-              })
-            } else {
-              context[vp.path + '$' + update['$source']] = {
-                path: vp.path,
-                $source: update.$source,
-                value: vp.value,
-                pgn,
-                sentence,
-                timestamp: formattedTimestamp
               }
-            }
-          })
-        }
-        if (update.meta) {
-          update.meta.forEach((vp) => {
-            contextMeta[vp.path] = { ...contextMeta[vp.path], ...vp.value }
-          })
+            })
+          }
+
+          if (update.meta) {
+            update.meta.forEach((vp) => {
+              newMetaForContext[vp.path] = {
+                ...newMetaForContext[vp.path],
+                ...vp.value
+              }
+            })
+          }
+        })
+
+        // Return new state with updated context
+        return {
+          hasData: true,
+          data: {
+            ...prevState.data,
+            [key]: newDataForContext
+          },
+          meta: {
+            ...prevState.meta,
+            [key]: newMetaForContext
+          }
         }
       })
-
-      if (isNew || (this.state.context && this.state.context === key)) {
-        this.setState({
-          ...this.state,
-          hasData: true,
-          data: this.state.data,
-          meta: this.state.meta
-        })
-      }
     }
   }
 
