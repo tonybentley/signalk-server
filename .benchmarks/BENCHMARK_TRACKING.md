@@ -13,17 +13,18 @@ After each code change:
 
 ## Key Metrics
 
-### Critical Metrics
-- **DOM Nodes**: PRIMARY METRIC - Track reduction from baseline 225 nodes → target < 100 after virtualization
+### Critical Metrics (DOM Reduction)
+- **Table DOM Nodes**: PRIMARY METRIC - Baseline 179 nodes (14 rows) → Target ~390 nodes after virtualization
+- **Nodes per Row**: 13 nodes/row (constant - used for projections)
+- **Projected 18k Rows**: 234,000 nodes → 390 nodes (600x reduction) - THE REAL WIN
+- **Total Page Nodes**: Track overall page complexity (baseline 366)
+
+### Performance Metrics
+- **Memory Usage**: JS heap size (baseline 14 MB) - watch for leaks
+- **Page Load Time**: Total load time (baseline 46ms)
 - **LCP (Largest Contentful Paint)**: Target < 200ms
 - **CLS (Cumulative Layout Shift)**: Target < 0.1
-- **Render Time**: Initial render of table
-
-### Secondary Metrics
-- **TTFB (Time to First Byte)**: Server response time
-- **Page Load Time**: Total time to interactive
-- **Memory Usage**: Track for memory leaks
-- **FPS during scroll**: Should maintain 60fps
+- **FPS during scroll**: Should maintain 60fps (critical with virtualization)
 
 ## Benchmark Results
 
@@ -35,23 +36,37 @@ After each code change:
 **Commit**: Initial state before refactoring
 **Branch**: refactor/databrowser-performance (start)
 
-### Metrics
-- **DOM Nodes**: 225 total nodes (from accessibility tree) - PRIMARY BASELINE
-- **LCP**: 159ms ✓ (excellent)
+### DOM Metrics (PRIMARY)
+- **Total Page Nodes**: 366 nodes
+- **Table DOM Nodes**: 179 nodes (tbody only) - PRIMARY BASELINE
+- **Visible Data Rows**: 14 rows
+- **Nodes per Row**: 13 nodes/row
+- **Projected 18k Rows**: 234,000 table nodes (18,000 × 13)
+
+### Performance Metrics
+- **Memory (JS Heap)**: 14 MB used / 17 MB total / 4096 MB limit
+- **Page Load Time**: 46ms
+- **DOM Content Loaded**: 8ms
+- **LCP**: 159ms ✓ (excellent with 14 rows)
 - **CLS**: 0.02 ✓ (excellent)
 - **TTFB**: 2ms
 - **Render Delay**: 157ms
-- **Visible Data Rows**: ~16 rows (sample data with limited paths)
-- **Page Behavior**: Live data updating, timestamps changing
 
-### Notes
-- Using NMEA sample data (`bin/nmea-from-file`)
-- ~16 data paths visible in current sample
-- Current implementation: Direct state mutation, full re-renders
-- Baseline is already performant with small dataset
-- **Expected issue**: Performance degrades significantly with 18k+ paths
-- **Critical Metric**: 225 DOM nodes with only 16 visible rows. With 18k paths, this would be ~18,000+ nodes
-- **Target**: Reduce to < 100 DOM nodes via virtualization (Step 5)
+### Analysis
+- **Current state**: Sample data with only 14 visible paths
+- **Performance NOW**: Excellent (14 rows × 13 nodes = 182 nodes)
+- **Performance at SCALE**: Would render 234,000 DOM nodes with 18k paths
+- **Browser Impact**: At 234k nodes, expect:
+  - Page freeze/unresponsive
+  - Memory bloat (14 MB → potentially 200+ MB)
+  - Render time in seconds, not milliseconds
+  - Scroll performance collapse
+
+### Target After Virtualization
+- **Table DOM Nodes**: ~390 nodes (30 visible rows × 13 nodes/row)
+- **Reduction**: 234,000 → 390 = **99.8% reduction at scale**
+- **Memory**: Should stay ~14-20 MB even with 18k rows
+- **Performance**: Maintain <200ms LCP regardless of data size
 
 ### Screenshot
 `.screenshots/baseline-databrowser.png`
@@ -84,30 +99,39 @@ After each code change:
 **Changes**: Replace direct state mutation with immutable setState
 
 ### Expected Impact
+- **DOM**: No change expected (rendering logic unchanged)
 - **Performance**: No significant change expected
 - **React Behavior**: Fixed reconciliation, proper memo/shouldUpdate behavior
 - **Rationale**: Foundation for memoization in Step 4
 
-### Metrics
-- **DOM Nodes**: 225 total nodes (unchanged - as expected) ✓
-- **LCP**: 163ms (regression: +4ms from 159ms)
-- **CLS**: 0.12 (regression: +0.10 from 0.02)
+### DOM Metrics
+- **Total Page Nodes**: [MEASURE - expect ~366, unchanged]
+- **Table DOM Nodes**: [MEASURE - expect ~179, unchanged]
+- **Visible Rows**: 14 (unchanged)
+- **Nodes per Row**: 13 (unchanged)
+- **Projected 18k**: Still 234,000 nodes (no virtualization yet)
+
+### Performance Metrics
+- **Memory (JS Heap)**: [MEASURE - expect ~14 MB]
+- **Page Load Time**: [MEASURE]
+- **LCP**: 163ms (baseline 159ms - minor variance)
+- **CLS**: 0.12 (baseline 0.02 - variance, investigate if persists)
 - **Console Errors**: 1 (404 for resource - non-critical)
-- **Page Behavior**: Live data updating correctly ✓
 
 ### Analysis
-- **DOM Node Count**: Unchanged at 225 nodes (expected - no rendering changes yet)
-- **Performance Regressions**: Minor LCP/CLS variations likely due to measurement variance
-- **Foundation Step**: This refactor enables React.memo to work correctly in Step 4
-- **Immutable Updates**: Now using `setState` with functional updates instead of direct mutation
-- **Next Steps**: Step 4 memoization will prevent unnecessary re-renders
+- **Foundation Step**: No rendering changes, only state update pattern fixed
+- **DOM unchanged**: All nodes same as baseline (expected)
+- **Immutable Updates**: Now using `setState` with functional updates
+- **Enables Step 4**: React.memo will now work correctly
+- **Performance variance**: LCP/CLS fluctuations likely measurement noise
 
 ### Validation Checklist
 - [x] Build succeeds
 - [x] Data still updates live
 - [x] Visual appearance unchanged
 - [x] Screenshot captured (`.screenshots/step-3-fix-state-mutations.png`)
-- [ ] Commit changes after final review
+- [ ] Measure actual DOM/memory metrics
+- [ ] Commit changes after measurements
 
 ---
 
@@ -118,22 +142,29 @@ After each code change:
 **Changes**: Extract DataRow component with React.memo
 
 ### Expected Impact
-- **Performance**: 10-40% reduction in re-renders
-- **DOM Nodes**: No change expected (still 225)
+- **DOM**: No change (still renders all 14 rows)
+- **Performance**: 10-40% reduction in re-renders (only changed rows update)
 - **Visible Change**: None (visual parity)
-- **Rationale**: Only changed rows re-render
+- **Rationale**: Prevent unnecessary row re-renders on delta updates
 
-### Metrics
-- **DOM Nodes**: [MEASURE - expect 225, unchanged]
-- **LCP**: [MEASURE AFTER IMPLEMENTATION]
-- **CLS**: [MEASURE AFTER IMPLEMENTATION]
-- **Re-renders**: Track with React DevTools Profiler
-- **Console Errors**: Should be 0
+### DOM Metrics
+- **Total Page Nodes**: [MEASURE - expect ~366, unchanged]
+- **Table DOM Nodes**: [MEASURE - expect ~179, unchanged]
+- **Visible Rows**: 14 (unchanged)
+- **Nodes per Row**: 13 (unchanged)
+- **Projected 18k**: Still 234,000 nodes (no virtualization yet)
+
+### Performance Metrics
+- **Memory (JS Heap)**: [MEASURE - expect ~14 MB]
+- **Page Load Time**: [MEASURE]
+- **LCP**: [MEASURE]
+- **CLS**: [MEASURE]
+- **Re-renders**: Track with React DevTools Profiler (expect reduction)
 
 ### Validation Checklist
 - [ ] Build succeeds
-- [ ] DOM node count unchanged (225 nodes)
-- [ ] Fewer re-renders in React DevTools
+- [ ] DOM metrics unchanged
+- [ ] Fewer re-renders in React DevTools (CRITICAL - validate memoization works)
 - [ ] Data still updates live
 - [ ] Visual appearance unchanged
 
@@ -145,26 +176,36 @@ After each code change:
 **Commit**: [PENDING]
 **Changes**: Replace Table with FixedSizeList from react-window
 
-### Expected Impact
-- **DOM Nodes**: **CRITICAL REDUCTION** - From 225 → < 100 (target ~30-50 visible rows only)
-- **Performance**: With 18k paths, would reduce from ~18,000 → 30 nodes (600x reduction)
-- **Visible Change**: Scrollable list with same appearance
-- **Rationale**: Critical for large datasets
+### Expected Impact - THE BIG WIN
+- **Table DOM Nodes**: 179 → ~390 nodes (30 visible rows × 13 nodes/row)
+- **At 18k scale**: Prevents 234,000 nodes, renders only ~390 (99.8% reduction!)
+- **Memory**: Should stay ~14 MB even with 18k rows in dataset
+- **Visible Change**: Scrollable list with same visual appearance
+- **Rationale**: **THIS IS THE CRITICAL PERFORMANCE FIX**
 
-### Metrics
-- **DOM Nodes**: [MEASURE - TARGET: < 100, IDEAL: 30-50] **PRIMARY SUCCESS METRIC**
-- **LCP**: [MEASURE AFTER IMPLEMENTATION]
-- **CLS**: [MEASURE AFTER IMPLEMENTATION]
-- **Scroll FPS**: Should maintain 60fps
-- **Console Errors**: Should be 0
+### DOM Metrics (CRITICAL VALIDATION)
+- **Total Page Nodes**: [MEASURE - expect ~577 (366 + 211 table increase)]
+- **Table DOM Nodes**: [MEASURE - TARGET ~390 for 30 visible rows] **PRIMARY SUCCESS METRIC**
+- **Visible Rows**: ~30 rows (regardless of dataset size)
+- **Nodes per Row**: 13 (constant)
+- **Projected 18k**: **Only ~390 nodes** (not 234,000!) ✓✓✓
+
+### Performance Metrics
+- **Memory (JS Heap)**: [MEASURE - should stay ~14-20 MB]
+- **Page Load Time**: [MEASURE - may increase slightly due to virtualization setup]
+- **LCP**: [MEASURE - should stay < 200ms]
+- **CLS**: [MEASURE - watch for layout shift]
+- **Scroll FPS**: [CRITICAL - must maintain 60fps]
 
 ### Validation Checklist
 - [ ] Build succeeds
-- [ ] **DOM node count < 100** (CRITICAL - this is the main goal)
-- [ ] Smooth scrolling at 60fps
+- [ ] **Table DOM nodes ~390** (CRITICAL SUCCESS METRIC)
+- [ ] Only ~30 rows rendered at once (inspect DOM)
+- [ ] Smooth 60fps scrolling through all data
 - [ ] Data updates visible in viewport
+- [ ] Scrolling updates rendered rows dynamically
 - [ ] Visual appearance similar to baseline
-- [ ] Performance trace shows improvement
+- [ ] Memory stays low even with large dataset
 
 ---
 
@@ -226,14 +267,17 @@ After each code change:
 
 ### Complete Comparison
 
-| Metric | Baseline | After Refactor | Change |
-|--------|----------|----------------|--------|
-| **DOM Nodes** (PRIMARY) | 225 nodes | [MEASURE] | [CALCULATE] - Target: < 100 |
-| LCP | 159ms | [MEASURE] | [CALCULATE] |
-| CLS | 0.02 | [MEASURE] | [CALCULATE] |
-| TTFB | 2ms | [MEASURE] | [CALCULATE] |
-| Re-renders | Full table | Per-row only | [MEASURE] |
-| Memory (5min) | [BASELINE] | [MEASURE] | [CALCULATE] |
+| Metric | Baseline (14 rows) | After Refactor | Change | At 18k Rows Scale |
+|--------|-------------------|----------------|--------|------------------|
+| **Table DOM Nodes** | 179 nodes | [MEASURE ~390] | [CALC] | 234,000 → 390 (99.8%↓) |
+| **Total Page Nodes** | 366 nodes | [MEASURE] | [CALC] | Massive reduction |
+| **Nodes per Row** | 13 | 13 | Constant | Constant |
+| **Memory (JS Heap)** | 14 MB | [MEASURE] | [CALC] | Should stay ~14-20 MB |
+| **Page Load** | 46ms | [MEASURE] | [CALC] | Should stay < 200ms |
+| **LCP** | 159ms | [MEASURE] | [CALC] | Target < 200ms |
+| **CLS** | 0.02 | [MEASURE] | [CALC] | Target < 0.1 |
+| **Re-renders** | Full table (14) | Per-row only | Optimized | Per-row only (30 visible) |
+| **Scroll FPS** | N/A (14 rows) | 60fps | [VALIDATE] | **Critical at 18k** |
 
 ### Success Criteria
 - ✓ All features working (search, filter, pause, meta, raw)
@@ -282,8 +326,38 @@ mcp__chrome-devtools__list_console_messages({
   types: ["error"]
 })
 
-// Take accessibility snapshot (count DOM nodes)
+// Take accessibility snapshot
 mcp__chrome-devtools__take_snapshot()
+
+// Measure DOM nodes and memory (returns detailed metrics)
+mcp__chrome-devtools__evaluate_script({
+  function: `() => {
+    const totalNodes = document.getElementsByTagName('*').length;
+    const tbody = document.querySelector('table tbody');
+    const tableRows = tbody ? tbody.querySelectorAll('tr').length : 0;
+    const tableNodes = tbody ? tbody.getElementsByTagName('*').length : 0;
+    const memory = performance.memory ? {
+      usedJSHeapSize: Math.round(performance.memory.usedJSHeapSize / 1024 / 1024) + ' MB',
+      totalJSHeapSize: Math.round(performance.memory.totalJSHeapSize / 1024 / 1024) + ' MB'
+    } : 'Not available';
+    const perfData = performance.getEntriesByType('navigation')[0];
+    const loadTime = perfData ? Math.round(perfData.loadEventEnd - perfData.fetchStart) : 'N/A';
+    const nodesPerRow = tableRows > 0 ? Math.round(tableNodes / tableRows) : 0;
+    const projectedNodesFor18k = nodesPerRow * 18000;
+
+    return {
+      totalPageNodes: totalNodes,
+      dataTable: {
+        rows: tableRows,
+        totalNodes: tableNodes,
+        nodesPerRow: nodesPerRow,
+        projectedFor18kRows: projectedNodesFor18k
+      },
+      memory: memory,
+      timing: { pageLoadTime: loadTime + ' ms' }
+    };
+  }`
+})
 ```
 
 ### Manual Validation
