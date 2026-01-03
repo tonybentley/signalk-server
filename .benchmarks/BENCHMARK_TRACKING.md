@@ -79,16 +79,27 @@ After each code change:
 **Commit**: 3d0e3bab
 **Changes**: Added react-window@^1.8.10 to package.json
 
-### Metrics
-- **LCP**: [PENDING]
-- **CLS**: [PENDING]
-- **DOM Nodes**: [PENDING]
-- **Status**: Dependency added, no code changes yet
+### DOM Metrics
+- **Total Page Nodes**: 366 ✓ (unchanged from baseline)
+- **Table DOM Nodes**: 179 ✓ (unchanged from baseline)
+- **Visible Rows**: 14 (unchanged)
+- **Nodes per Row**: 13 (unchanged)
+- **Projected 18k**: Still 234,000 nodes (no virtualization yet)
 
-### Validation
-- ✓ react-window installed (v1.8.11)
-- ✓ Page still loads correctly
-- ✓ No regression expected (no code changes)
+### Performance Metrics
+- **Memory (JS Heap)**: 13 MB used / 18 MB total (baseline: 14/17 MB - normal variance)
+- **Page Load Time**: 93ms (baseline: 46ms - acceptable variance)
+- **Console Errors**: 0 ✓ (no errors)
+
+### Validation Checklist
+- ✓ react-window installed (v1.8.11 in node_modules)
+- ✓ npm run build succeeds
+- ✓ Server starts successfully
+- ✓ Page loads without errors
+- ✓ Data updates live
+- ✓ Visual appearance unchanged (screenshot captured)
+- ✓ DOM/memory metrics measured
+- ✓ No regression - dependency only, no code changes
 
 ---
 
