@@ -151,6 +151,101 @@ const DataRow = React.memo(({
   )
 })
 
+// Memoized DataTable component - caches filter/sort operations
+const DataTable = ({
+  data,
+  meta,
+  search,
+  raw,
+  pause,
+  selectedSources,
+  sourceFilterActive,
+  toggleSourceFilter,
+  toggleSourceSelection
+}) => {
+  // Memoize the filter and sort operations - only recalculate when dependencies change
+  const filteredSortedKeys = React.useMemo(() => {
+    return Object.keys(data || {})
+      .filter((key) => {
+        const rowData = data[key]
+
+        // Search filter
+        const pathMatches =
+          !search ||
+          search.length === 0 ||
+          key.toLowerCase().indexOf(search.toLowerCase()) !== -1
+        if (!pathMatches) {
+          return false
+        }
+
+        // Source filter
+        if (sourceFilterActive && selectedSources.size > 0) {
+          return selectedSources.has(rowData.$source)
+        }
+
+        return true
+      })
+      .sort()
+  }, [data, search, sourceFilterActive, selectedSources])
+
+  return (
+    <Table
+      responsive
+      bordered
+      striped
+      size="sm"
+      className="responsive-table"
+    >
+      <thead>
+        <tr>
+          <th className="path-cell">Path</th>
+          <th className="value-cell">Value</th>
+          <th className="timestamp-cell">Timestamp</th>
+          <th className="source-cell">
+            <input
+              type="checkbox"
+              onChange={toggleSourceFilter}
+              checked={sourceFilterActive}
+              disabled={selectedSources.size === 0}
+              title={
+                selectedSources.size === 0
+                  ? 'Check a source in the list to filter by source'
+                  : sourceFilterActive
+                    ? 'Uncheck to deactivate source filtering'
+                    : 'Check to activate source filtering'
+              }
+              style={{
+                marginRight: '5px',
+                verticalAlign: 'middle'
+              }}
+            />
+            Source
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {filteredSortedKeys.map((key) => {
+          const rowData = data[key]
+          const rowMeta = meta[rowData.path]
+
+          return (
+            <DataRow
+              key={key}
+              pathKey={key}
+              data={rowData}
+              meta={rowMeta}
+              raw={raw}
+              isPaused={pause}
+              selectedSources={selectedSources}
+              onToggleSource={toggleSourceSelection}
+            />
+          )
+        })}
+      </tbody>
+    </Table>
+  )
+}
+
 class DataBrowser extends Component {
   constructor(props) {
     super(props)
@@ -702,86 +797,17 @@ class DataBrowser extends Component {
               {!this.state.includeMeta &&
                 this.state.context &&
                 this.state.context !== 'none' && (
-                  <Table
-                    responsive
-                    bordered
-                    striped
-                    size="sm"
-                    className="responsive-table"
-                  >
-                    <thead>
-                      <tr>
-                        <th className="path-cell">Path</th>
-                        <th className="value-cell">Value</th>
-                        <th className="timestamp-cell">Timestamp</th>
-                        <th className="source-cell">
-                          <input
-                            type="checkbox"
-                            onChange={this.toggleSourceFilter}
-                            checked={this.state.sourceFilterActive}
-                            disabled={this.state.selectedSources.size === 0}
-                            title={
-                              this.state.selectedSources.size === 0
-                                ? 'Check a source in the list to filter by source'
-                                : this.state.sourceFilterActive
-                                  ? 'Uncheck to deactivate source filtering'
-                                  : 'Check to activate source filtering'
-                            }
-                            style={{
-                              marginRight: '5px',
-                              verticalAlign: 'middle'
-                            }}
-                          />
-                          Source
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {Object.keys(this.state.data[this.state.context] || {})
-                        .filter((key) => {
-                          const data = this.state.data[this.state.context][key]
-
-                          const pathMatches =
-                            !this.state.search ||
-                            this.state.search.length === 0 ||
-                            key
-                              .toLowerCase()
-                              .indexOf(this.state.search.toLowerCase()) !== -1
-                          if (!pathMatches) {
-                            return false
-                          }
-
-                          // If source filter is active, also check source selection
-                          if (
-                            this.state.sourceFilterActive &&
-                            this.state.selectedSources.size > 0
-                          ) {
-                            return this.state.selectedSources.has(data.$source)
-                          }
-
-                          return true
-                        })
-                        .sort()
-                        .map((key) => {
-                          const data = this.state.data[this.state.context][key]
-                          const meta =
-                            this.state.meta[this.state.context][data.path]
-
-                          return (
-                            <DataRow
-                              key={key}
-                              pathKey={key}
-                              data={data}
-                              meta={meta}
-                              raw={this.state.raw}
-                              isPaused={this.state.pause}
-                              selectedSources={this.state.selectedSources}
-                              onToggleSource={this.toggleSourceSelection}
-                            />
-                          )
-                        })}
-                    </tbody>
-                  </Table>
+                  <DataTable
+                    data={this.state.data[this.state.context] || {}}
+                    meta={this.state.meta[this.state.context] || {}}
+                    search={this.state.search}
+                    raw={this.state.raw}
+                    pause={this.state.pause}
+                    selectedSources={this.state.selectedSources}
+                    sourceFilterActive={this.state.sourceFilterActive}
+                    toggleSourceFilter={this.toggleSourceFilter}
+                    toggleSourceSelection={this.toggleSourceSelection}
+                  />
                 )}
 
               {this.state.includeMeta &&
