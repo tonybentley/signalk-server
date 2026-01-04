@@ -65,6 +65,7 @@ const PathCell = React.memo(({ path }) => (
     </CopyToClipboardWithFade>
   </td>
 ))
+PathCell.displayName = 'PathCell'
 
 // ValueCell - uses initial data + RxJS subscriptions for updates (Step 8b)
 const ValueCell = ({ context, pathKey, raw, meta, path, initialData }) => {
@@ -73,7 +74,7 @@ const ValueCell = ({ context, pathKey, raw, meta, path, initialData }) => {
   React.useEffect(() => {
     const subscription = dataStore
       .getSubject(context, pathKey)
-      .subscribe(newData => {
+      .subscribe((newData) => {
         setData(newData)
       })
 
@@ -91,16 +92,10 @@ const ValueCell = ({ context, pathKey, raw, meta, path, initialData }) => {
           return (
             <div>
               <div className="text-primary">
-                value:{' '}
-                {JSON.stringify(data.value, null, 2)}
+                value: {JSON.stringify(data.value, null, 2)}
               </div>
               <div className="text-primary">
-                meta:{' '}
-                {JSON.stringify(
-                  meta ? meta : {},
-                  null,
-                  2
-                )}
+                meta: {JSON.stringify(meta ? meta : {}, null, 2)}
               </div>
             </div>
           )
@@ -115,95 +110,101 @@ const ValueCell = ({ context, pathKey, raw, meta, path, initialData }) => {
             />
           )
         }
-        return (
-          <DefaultValueRenderer
-            value={data.value}
-            units={units}
-          />
-        )
+        return <DefaultValueRenderer value={data.value} units={units} />
       })()}
     </td>
   )
 }
+ValueCell.displayName = 'ValueCell'
 // NO React.memo - component manages its own subscription
 
 // SourceCell - static except when checkbox toggled (Step 8a)
-const SourceCell = React.memo(({ source, pgn, sentence, selectedSources, onToggleSource }) => (
-  <td className="source-cell">
-    <input
-      type="checkbox"
-      onChange={() => onToggleSource(source)}
-      checked={selectedSources.has(source)}
-      style={{
-        marginRight: '5px',
-        verticalAlign: 'middle'
-      }}
-    />
-    <CopyToClipboardWithFade text={source}>
-      {source} <i className="far fa-copy"></i>
-    </CopyToClipboardWithFade>{' '}
-    {pgn || ''}
-    {sentence || ''}
-  </td>
-), (prevProps, nextProps) => {
-  // Only re-render if source or checkbox state changed
-  return prevProps.source === nextProps.source &&
-         prevProps.selectedSources === nextProps.selectedSources
-})
+const SourceCell = React.memo(
+  ({ source, pgn, sentence, selectedSources, onToggleSource }) => (
+    <td className="source-cell">
+      <input
+        type="checkbox"
+        onChange={() => onToggleSource(source)}
+        checked={selectedSources.has(source)}
+        style={{
+          marginRight: '5px',
+          verticalAlign: 'middle'
+        }}
+      />
+      <CopyToClipboardWithFade text={source}>
+        {source} <i className="far fa-copy"></i>
+      </CopyToClipboardWithFade>{' '}
+      {pgn || ''}
+      {sentence || ''}
+    </td>
+  ),
+  (prevProps, nextProps) => {
+    // Only re-render if source or checkbox state changed
+    return (
+      prevProps.source === nextProps.source &&
+      prevProps.selectedSources === nextProps.selectedSources
+    )
+  }
+)
+SourceCell.displayName = 'SourceCell'
 
 // DataRow - static shell that passes initial data to cells (Step 8b)
-const DataRow = React.memo(({
-  context,
-  pathKey,
-  path,
-  source,
-  pgn,
-  sentence,
-  meta,
-  raw,
-  isPaused,
-  selectedSources,
-  onToggleSource,
-  initialData
-}) => {
-  // Passes initial data from state to cells
-  // Cells use RxJS subscriptions for live updates
+const DataRow = React.memo(
+  ({
+    context,
+    pathKey,
+    path,
+    source,
+    pgn,
+    sentence,
+    meta,
+    raw,
+    isPaused,
+    selectedSources,
+    onToggleSource,
+    initialData
+  }) => {
+    // Passes initial data from state to cells
+    // Cells use RxJS subscriptions for live updates
 
-  return (
-    <tr>
-      <PathCell path={path} />
-      <ValueCell
-        context={context}
-        pathKey={pathKey}
-        path={path}
-        meta={meta}
-        raw={raw}
-        initialData={initialData}
-      />
-      <TimestampCell
-        context={context}
-        pathKey={pathKey}
-        isPaused={isPaused}
-        className="timestamp-cell"
-        initialTimestamp={initialData?.timestamp}
-      />
-      <SourceCell
-        source={source}
-        pgn={pgn}
-        sentence={sentence}
-        selectedSources={selectedSources}
-        onToggleSource={onToggleSource}
-      />
-    </tr>
-  )
-}, (prevProps, nextProps) => {
-  // Only re-render if static props change (search filter, source filter, pause toggle)
-  return (
-    prevProps.raw === nextProps.raw &&
-    prevProps.isPaused === nextProps.isPaused &&
-    prevProps.selectedSources === nextProps.selectedSources
-  )
-})
+    return (
+      <tr>
+        <PathCell path={path} />
+        <ValueCell
+          context={context}
+          pathKey={pathKey}
+          path={path}
+          meta={meta}
+          raw={raw}
+          initialData={initialData}
+        />
+        <TimestampCell
+          context={context}
+          pathKey={pathKey}
+          isPaused={isPaused}
+          className="timestamp-cell"
+          initialTimestamp={initialData?.timestamp}
+        />
+        <SourceCell
+          source={source}
+          pgn={pgn}
+          sentence={sentence}
+          selectedSources={selectedSources}
+          onToggleSource={onToggleSource}
+        />
+      </tr>
+    )
+  },
+  (prevProps, nextProps) => {
+    // Only re-render if static props change (search filter, source filter, pause toggle)
+    return (
+      prevProps.raw === nextProps.raw &&
+      prevProps.isPaused === nextProps.isPaused &&
+      prevProps.selectedSources === nextProps.selectedSources
+    )
+  }
+)
+DataRow.displayName = 'DataRow'
 
 // Memoized DataTable component - caches filter/sort operations (Step 8b)
 const DataTable = ({
@@ -244,13 +245,7 @@ const DataTable = ({
   }, [data, search, sourceFilterActive, selectedSources])
 
   return (
-    <Table
-      responsive
-      bordered
-      striped
-      size="sm"
-      className="responsive-table"
-    >
+    <Table responsive bordered striped size="sm" className="responsive-table">
       <thead>
         <tr>
           <th className="path-cell">Path</th>
@@ -948,7 +943,13 @@ class DataBrowser extends Component {
 }
 
 // TimestampCell - uses initial timestamp + RxJS subscriptions for updates (Step 8b)
-const TimestampCell = ({ context, pathKey, isPaused, className, initialTimestamp }) => {
+const TimestampCell = ({
+  context,
+  pathKey,
+  isPaused,
+  className,
+  initialTimestamp
+}) => {
   const [timestamp, setTimestamp] = React.useState(initialTimestamp || null)
   const [isUpdated, setIsUpdated] = React.useState(false)
   const [animationKey, setAnimationKey] = React.useState(0)
@@ -957,7 +958,7 @@ const TimestampCell = ({ context, pathKey, isPaused, className, initialTimestamp
   React.useEffect(() => {
     const subscription = dataStore
       .getSubject(context, pathKey)
-      .subscribe(data => {
+      .subscribe((data) => {
         setTimestamp(data.timestamp)
 
         // Trigger animation
@@ -966,7 +967,7 @@ const TimestampCell = ({ context, pathKey, isPaused, className, initialTimestamp
         }
 
         setIsUpdated(true)
-        setAnimationKey(prev => prev + 1)
+        setAnimationKey((prev) => prev + 1)
 
         timeoutRef.current = setTimeout(() => {
           if (!isPaused) {
@@ -989,7 +990,8 @@ const TimestampCell = ({ context, pathKey, isPaused, className, initialTimestamp
     }
   }, [isPaused])
 
-  if (!timestamp) return <td className={className || 'timestamp-cell'}>--:--:--</td>
+  if (!timestamp)
+    return <td className={className || 'timestamp-cell'}>--:--:--</td>
 
   return (
     <td
