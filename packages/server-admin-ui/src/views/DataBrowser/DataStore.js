@@ -10,21 +10,12 @@ const TIMESTAMP_FORMAT = 'MMM DD HH:mm:ss'
  *
  * Pattern:
  * - WebSocket delta arrives → pushDelta() → push to relevant Subjects
- * - Each DataRow subscribes to its Subject → only that row re-renders on change
+ * - Each cell subscribes to its Subject → receives future updates
  * - Parent component doesn't re-render on deltas
  */
 class DataStore {
   constructor() {
     this.subjects = new Map() // Map<string, Subject> - key format: "context:pathKey"
-    this.selfContext = null
-  }
-
-  /**
-   * Set the self context (e.g., "vessels.urn:mrn:signalk:uuid:...")
-   * Used to normalize context to 'self' for UI consistency
-   */
-  setSelfContext(selfContext) {
-    this.selfContext = selfContext
   }
 
   /**
@@ -35,6 +26,7 @@ class DataStore {
    */
   getSubject(context, pathKey) {
     const key = `${context}:${pathKey}`
+
     if (!this.subjects.has(key)) {
       this.subjects.set(key, new Subject())
     }
@@ -51,8 +43,9 @@ class DataStore {
       return
     }
 
-    // Normalize context: convert selfContext to 'self' for consistency
-    const context = msg.context === this.selfContext ? 'self' : msg.context
+    // Normalize context: convert vessel contexts to 'self' for UI consistency
+    // Pattern: "vessels.urn:mrn:signalk:uuid:..." → "self"
+    const context = msg.context.startsWith('vessels.') ? 'self' : msg.context
 
     msg.updates.forEach((update) => {
       if (!update.values) return
@@ -77,7 +70,7 @@ class DataStore {
           sentence: update.sentence
         }
 
-        // Push to this path's Subject - only subscribed rows will react
+        // Push to this path's Subject - only subscribed cells will react
         this.getSubject(context, pathKey).next(data)
       })
     })

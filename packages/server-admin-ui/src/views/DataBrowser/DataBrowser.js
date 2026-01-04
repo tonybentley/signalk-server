@@ -66,50 +66,66 @@ const PathCell = React.memo(({ path }) => (
   </td>
 ))
 
-// ValueCell - changes on delta, renders value (Step 8a)
-const ValueCell = React.memo(({ value, units, raw, meta, path }) => (
-  <td className="value-cell">
-    {(() => {
-      if (raw) {
-        return (
-          <div>
-            <div className="text-primary">
-              value:{' '}
-              {JSON.stringify(value, null, 2)}
+// ValueCell - subscribes directly to RxJS (Step 8b)
+const ValueCell = ({ context, pathKey, raw, meta, path }) => {
+  const [data, setData] = React.useState(null)
+
+  React.useEffect(() => {
+    const subscription = dataStore
+      .getSubject(context, pathKey)
+      .subscribe(newData => {
+        setData(newData)
+      })
+
+    return () => subscription.unsubscribe()
+  }, [context, pathKey])
+
+  if (!data) return <td className="value-cell">Loading...</td>
+
+  const units = meta?.units || ''
+
+  return (
+    <td className="value-cell">
+      {(() => {
+        if (raw) {
+          return (
+            <div>
+              <div className="text-primary">
+                value:{' '}
+                {JSON.stringify(data.value, null, 2)}
+              </div>
+              <div className="text-primary">
+                meta:{' '}
+                {JSON.stringify(
+                  meta ? meta : {},
+                  null,
+                  2
+                )}
+              </div>
             </div>
-            <div className="text-primary">
-              meta:{' '}
-              {JSON.stringify(
-                meta ? meta : {},
-                null,
-                2
-              )}
-            </div>
-          </div>
-        )
-      }
-      const CustomRenderer = getValueRenderer(path, meta)
-      if (CustomRenderer) {
+          )
+        }
+        const CustomRenderer = getValueRenderer(path, meta)
+        if (CustomRenderer) {
+          return (
+            <CustomRenderer
+              value={data.value}
+              units={units}
+              {...meta?.renderer?.options}
+            />
+          )
+        }
         return (
-          <CustomRenderer
-            value={value}
+          <DefaultValueRenderer
+            value={data.value}
             units={units}
-            {...meta?.renderer?.options}
           />
         )
-      }
-      return (
-        <DefaultValueRenderer
-          value={value}
-          units={units}
-        />
-      )
-    })()}
-  </td>
-), (prevProps, nextProps) => {
-  // Only re-render if value or raw mode changed
-  return prevProps.value === nextProps.value && prevProps.raw === nextProps.raw
-})
+      })()}
+    </td>
+  )
+}
+// NO React.memo - component manages its own subscription
 
 // SourceCell - static except when checkbox toggled (Step 8a)
 const SourceCell = React.memo(({ source, pgn, sentence, selectedSources, onToggleSource }) => (
@@ -135,58 +151,62 @@ const SourceCell = React.memo(({ source, pgn, sentence, selectedSources, onToggl
          prevProps.selectedSources === nextProps.selectedSources
 })
 
-// Memoized DataRow component - composed of memoized cells (Step 8a complete)
+// DataRow - completely static shell for cell components (Step 8b)
 const DataRow = React.memo(({
+  context,
   pathKey,
-  data,
+  path,
+  source,
+  pgn,
+  sentence,
   meta,
   raw,
   isPaused,
   selectedSources,
   onToggleSource
 }) => {
-  const units = meta && meta.units ? meta.units : ''
+  // NO useState - NO data prop - just a static shell
+  // Cells subscribe directly to RxJS for live updates
 
   return (
-    <tr key={pathKey}>
-      <PathCell path={data.path} />
+    <tr>
+      <PathCell path={path} />
       <ValueCell
-        value={data.value}
-        units={units}
-        raw={raw}
+        context={context}
+        pathKey={pathKey}
+        path={path}
         meta={meta}
-        path={data.path}
+        raw={raw}
       />
       <TimestampCell
-        timestamp={data.timestamp}
+        context={context}
+        pathKey={pathKey}
         isPaused={isPaused}
         className="timestamp-cell"
       />
       <SourceCell
-        source={data.$source}
-        pgn={data.pgn}
-        sentence={data.sentence}
+        source={source}
+        pgn={pgn}
+        sentence={sentence}
         selectedSources={selectedSources}
         onToggleSource={onToggleSource}
       />
     </tr>
   )
 }, (prevProps, nextProps) => {
-  // Only re-render if data has changed
-  // Compare timestamp (primary change indicator) and other key props
+  // Only re-render if static props change (search filter, source filter, pause toggle)
   return (
-    prevProps.data.timestamp === nextProps.data.timestamp &&
-    prevProps.data.value === nextProps.data.value &&
     prevProps.raw === nextProps.raw &&
     prevProps.isPaused === nextProps.isPaused &&
     prevProps.selectedSources === nextProps.selectedSources
   )
 })
 
-// Memoized DataTable component - caches filter/sort operations
+// Memoized DataTable component - caches filter/sort operations (Step 8b)
 const DataTable = ({
   data,
   meta,
+  context,
   search,
   raw,
   pause,
@@ -263,8 +283,12 @@ const DataTable = ({
           return (
             <DataRow
               key={key}
+              context={context}
               pathKey={key}
-              data={rowData}
+              path={rowData.path}
+              source={rowData.$source}
+              pgn={rowData.pgn}
+              sentence={rowData.sentence}
               meta={rowMeta}
               raw={raw}
               isPaused={pause}
@@ -316,16 +340,16 @@ class DataBrowser extends Component {
     }
 
     if (msg.context && msg.updates) {
-      // Push to RxJS DataStore for per-row subscriptions (Step 7)
+      // ALWAYS push to RxJS for reactive cell subscriptions (Step 8b)
       dataStore.pushDelta(msg)
 
       const key =
         msg.context === this.state.webSocket.skSelf ? 'self' : msg.context
 
-      // Also keep setState for initial data load and compatibility (will be removed in Step 8b)
-      // Immutable update - build new data and meta objects
+      // Keep setState for backwards compatibility and initial data load
+      // Cell-level RxJS subscriptions are the real optimization
+      // Parent may re-render, but DataRow is memoized and cells manage their own updates
       this.setState((prevState) => {
-        // Clone existing data and meta for this context
         const newDataForContext = { ...(prevState.data[key] || {}) }
         const newMetaForContext = { ...(prevState.meta[key] || {}) }
 
@@ -381,7 +405,6 @@ class DataBrowser extends Component {
           }
         })
 
-        // Return new state with updated context
         return {
           hasData: true,
           data: {
@@ -438,10 +461,6 @@ class DataBrowser extends Component {
   }
 
   componentDidMount() {
-    // Set self context for DataStore normalization
-    if (this.props.webSocket && this.props.webSocket.skSelf) {
-      dataStore.setSelfContext(this.props.webSocket.skSelf)
-    }
     this.fetchSources()
     this.subscribeToDataIfNeeded()
   }
@@ -842,6 +861,11 @@ class DataBrowser extends Component {
                   <DataTable
                     data={this.state.data[this.state.context] || {}}
                     meta={this.state.meta[this.state.context] || {}}
+                    context={
+                      this.state.context === this.props.webSocket?.skSelf
+                        ? 'self'
+                        : this.state.context
+                    }
                     search={this.state.search}
                     raw={this.state.raw}
                     pause={this.state.pause}
@@ -919,62 +943,62 @@ class DataBrowser extends Component {
   }
 }
 
-class TimestampCell extends Component {
-  constructor(props) {
-    super(props)
-    this.state = {
-      isUpdated: false,
-      animationKey: 0
-    }
-    this.timeoutId = null
-  }
+// TimestampCell - subscribes directly to RxJS with animation (Step 8b)
+const TimestampCell = ({ context, pathKey, isPaused, className }) => {
+  const [timestamp, setTimestamp] = React.useState(null)
+  const [isUpdated, setIsUpdated] = React.useState(false)
+  const [animationKey, setAnimationKey] = React.useState(0)
+  const timeoutRef = React.useRef(null)
 
-  componentDidUpdate(prevProps) {
-    if (prevProps.timestamp !== this.props.timestamp) {
-      if (this.timeoutId) {
-        clearTimeout(this.timeoutId)
-      }
+  React.useEffect(() => {
+    const subscription = dataStore
+      .getSubject(context, pathKey)
+      .subscribe(data => {
+        setTimestamp(data.timestamp)
 
-      this.setState((state) => ({
-        isUpdated: true,
-        animationKey: state.animationKey + 1
-      }))
-
-      this.timeoutId = setTimeout(() => {
-        if (!this.props.isPaused) {
-          this.setState({ isUpdated: false })
+        // Trigger animation
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current)
         }
-      }, 15000)
-    }
-  }
 
-  componentDidMount() {
-    if (this.props.isPaused) {
-      this.setState({ isUpdated: false })
-    }
-  }
+        setIsUpdated(true)
+        setAnimationKey(prev => prev + 1)
 
-  componentWillUnmount() {
-    if (this.timeoutId) {
-      clearTimeout(this.timeoutId)
-    }
-  }
+        timeoutRef.current = setTimeout(() => {
+          if (!isPaused) {
+            setIsUpdated(false)
+          }
+        }, 15000)
+      })
 
-  render() {
-    return (
-      <td
-        className={`${this.props.className || ''} ${
-          this.state.isUpdated && !this.props.isPaused
-            ? 'timestamp-updated'
-            : ''
-        }`}
-        key={this.state.animationKey}
-      >
-        {this.props.timestamp}
-      </td>
-    )
-  }
+    return () => {
+      subscription.unsubscribe()
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
+    }
+  }, [context, pathKey, isPaused])
+
+  React.useEffect(() => {
+    if (isPaused) {
+      setIsUpdated(false)
+    }
+  }, [isPaused])
+
+  if (!timestamp) return <td className={className || 'timestamp-cell'}>--:--:--</td>
+
+  return (
+    <td
+      className={`${className || ''} ${
+        isUpdated && !isPaused ? 'timestamp-updated' : ''
+      }`}
+      key={animationKey}
+    >
+      {timestamp}
+    </td>
+  )
 }
+// NO React.memo - component manages its own subscription
 
 class CopyToClipboardWithFade extends Component {
   constructor() {
