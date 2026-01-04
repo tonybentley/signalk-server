@@ -20,16 +20,19 @@
 
 ```javascript
 // 1. Navigate to DataBrowser
-await mcp__chrome-devtools__navigate_page({
-  type: "url",
-  url: "http://localhost:3000/admin/#/databrowser"
-})
+;(await mcp__chrome) -
+  devtools__navigate_page({
+    type: 'url',
+    url: 'http://localhost:3000/admin/#/databrowser'
+  })
 
 // 2. Run performance trace
-const trace = await mcp__chrome-devtools__performance_start_trace({
-  reload: true,
-  autoStop: true
-})
+const trace =
+  (await mcp__chrome) -
+  devtools__performance_start_trace({
+    reload: true,
+    autoStop: true
+  })
 
 // Extract from trace results:
 // - LCP (Largest Contentful Paint)
@@ -38,17 +41,19 @@ const trace = await mcp__chrome-devtools__performance_start_trace({
 // - Render delays
 
 // 3. Take screenshot for visual comparison
-await mcp__chrome-devtools__take_screenshot({
-  filePath: `.screenshots/step-${STEP_NUMBER}-databrowser.png`
-})
+;(await mcp__chrome) -
+  devtools__take_screenshot({
+    filePath: `.screenshots/step-${STEP_NUMBER}-databrowser.png`
+  })
 
 // 4. Check for console errors
-await mcp__chrome-devtools__list_console_messages({
-  types: ["error"]
-})
+;(await mcp__chrome) -
+  devtools__list_console_messages({
+    types: ['error']
+  })
 
 // 5. Count DOM nodes (from accessibility snapshot)
-const snapshot = await mcp__chrome-devtools__take_snapshot()
+const snapshot = (await mcp__chrome) - devtools__take_snapshot()
 // Count table rows or elements
 ```
 
@@ -65,26 +70,27 @@ const snapshot = await mcp__chrome-devtools__take_snapshot()
 
 ### Critical Performance Metrics
 
-| Metric | Description | Target | How to Measure |
-|--------|-------------|--------|----------------|
-| **LCP** | Largest Contentful Paint | < 200ms | Chrome DevTools performance trace |
-| **CLS** | Cumulative Layout Shift | < 0.1 | Chrome DevTools performance trace |
-| **DOM Nodes** | Number of rendered elements | < 100 for virtualization | Count from accessibility snapshot |
-| **Render Time** | Time to first paint of table | < 500ms | Performance trace render delay |
+| Metric          | Description                  | Target                   | How to Measure                    |
+| --------------- | ---------------------------- | ------------------------ | --------------------------------- |
+| **LCP**         | Largest Contentful Paint     | < 200ms                  | Chrome DevTools performance trace |
+| **CLS**         | Cumulative Layout Shift      | < 0.1                    | Chrome DevTools performance trace |
+| **DOM Nodes**   | Number of rendered elements  | < 100 for virtualization | Count from accessibility snapshot |
+| **Render Time** | Time to first paint of table | < 500ms                  | Performance trace render delay    |
 
 ### Secondary Metrics
 
-| Metric | Description | Target | How to Measure |
-|--------|-------------|--------|----------------|
-| **TTFB** | Time to First Byte | < 50ms | Performance trace |
-| **Page Load** | Total load time | < 2s | Performance trace bounds |
-| **FPS** | Frames per second during scroll | 60fps | Performance trace during scroll |
-| **Memory** | Memory usage over time | Stable | Chrome DevTools Memory tab |
-| **Console Errors** | JavaScript errors | 0 | list_console_messages |
+| Metric             | Description                     | Target | How to Measure                  |
+| ------------------ | ------------------------------- | ------ | ------------------------------- |
+| **TTFB**           | Time to First Byte              | < 50ms | Performance trace               |
+| **Page Load**      | Total load time                 | < 2s   | Performance trace bounds        |
+| **FPS**            | Frames per second during scroll | 60fps  | Performance trace during scroll |
+| **Memory**         | Memory usage over time          | Stable | Chrome DevTools Memory tab      |
+| **Console Errors** | JavaScript errors               | 0      | list_console_messages           |
 
 ## Benchmark Workflow for Each Step
 
 ### Pre-Change Benchmark
+
 1. ✅ Current code is working
 2. ✅ Server running (`bin/nmea-from-file`)
 3. 📸 Capture baseline screenshot
@@ -92,11 +98,13 @@ const snapshot = await mcp__chrome-devtools__take_snapshot()
 5. 📝 Document current metrics
 
 ### Make Code Changes
+
 1. Edit files
 2. Build: `npm run build` (from packages/server-admin-ui or root)
 3. Restart server if needed
 
 ### Post-Change Benchmark
+
 1. ✅ Build succeeds
 2. ✅ Server running
 3. ✅ Page loads without errors
@@ -107,6 +115,7 @@ const snapshot = await mcp__chrome-devtools__take_snapshot()
 8. ✅ Validate improvements
 
 ### Update Tracking Document
+
 ```bash
 # Edit .benchmarks/BENCHMARK_TRACKING.md
 # Fill in the STEP section with:
@@ -123,6 +132,7 @@ After each benchmark collection:
 
 ```markdown
 ### Validation Checklist
+
 - [ ] Build succeeds: `npm run build`
 - [ ] Server starts: `bin/nmea-from-file`
 - [ ] Page loads without errors
@@ -137,6 +147,7 @@ After each benchmark collection:
 ## Interpreting Results
 
 ### Good Signs ✅
+
 - LCP decreased or stayed same
 - CLS remained < 0.1
 - DOM nodes decreased (especially after virtualization)
@@ -145,6 +156,7 @@ After each benchmark collection:
 - Smooth 60fps scrolling
 
 ### Warning Signs ⚠️
+
 - LCP increased significantly (> 50ms regression)
 - CLS increased (> 0.05 regression)
 - New console errors appeared
@@ -214,6 +226,7 @@ ls -la .screenshots/
 ### Issue: Can't measure with many rows (only 16 in sample data)
 
 **Solution**: The sample data has limited paths. The real benefit shows with 18k+ paths. Document:
+
 - Current performance with ~16 rows
 - Expected improvement calculation
 - Note: "Performance gains will be more significant with full dataset"
@@ -221,6 +234,7 @@ ls -la .screenshots/
 ### Issue: Measurements vary between runs
 
 **Solution**:
+
 - Run trace 2-3 times, use average
 - Ensure no other heavy processes running
 - Use same browser/conditions for all measurements
@@ -228,6 +242,7 @@ ls -la .screenshots/
 ### Issue: Changes don't affect performance measurably
 
 **Some refactors** (like fixing state mutations) are foundations for later improvements. Document:
+
 - "No significant performance change expected"
 - "Enables Step 4 memoization to work correctly"
 
@@ -236,6 +251,7 @@ ls -la .screenshots/
 From `.llm/WORKFLOW_CONTEXT.md` Phase 3, add:
 
 **After each code change:**
+
 ```markdown
 5. **Performance Check** (NEW)
    - Use Chrome DevTools performance trace
@@ -257,6 +273,7 @@ When working on DataBrowser refactoring:
 6. **VALIDATE**: All checkboxes must pass
 
 **Red flags to watch for:**
+
 - LCP increased > 50ms
 - CLS > 0.1
 - New console errors

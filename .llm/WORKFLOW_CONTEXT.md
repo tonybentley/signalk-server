@@ -28,6 +28,7 @@ chore/<maintenance-task>
 ### Standard Workflow
 
 1. **Create Feature Branch**
+
    ```bash
    git checkout -b feature/your-feature-name
    ```
@@ -36,6 +37,7 @@ chore/<maintenance-task>
    - Make small, testable changes
    - Commit after each validation step
    - Use conventional commit format:
+
      ```
      <type>: <subject>
 
@@ -43,6 +45,7 @@ chore/<maintenance-task>
 
      <footer>
      ```
+
    - Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 
 3. **Testing Before Merge**
@@ -63,17 +66,20 @@ For each feature, follow this cycle:
 ### Phase 1: Research & Planning
 
 **Steps:**
+
 1. Read `.llm/PATTERN_INDEX.md` for codebase patterns
 2. Identify affected files using Glob/Grep
 3. Read existing implementations
 4. Document approach
 
 **Validation:**
+
 - [ ] All relevant files identified
 - [ ] Existing patterns understood
 - [ ] Plan documented in TODO list
 
 **Example:**
+
 ```bash
 # Find existing API patterns
 grep -r "openApi" src/api/
@@ -85,12 +91,14 @@ grep -r "course" src/
 ### Phase 2: Setup & Environment
 
 **Steps:**
+
 1. Start server with sample data
 2. Launch Chrome and navigate to admin UI
 3. Take baseline screenshots
 4. Verify current functionality
 
 **Commands:**
+
 ```bash
 # Terminal 1: Start server with sample data
 bin/nmea-from-file
@@ -102,6 +110,7 @@ npm run watch
 ```
 
 **Validation:**
+
 - [ ] Server running on port 3000
 - [ ] Dashboard shows live data (deltas/second > 0)
 - [ ] No errors in console
@@ -117,17 +126,21 @@ npm run watch
    - Update types if using TypeScript
 
 2. **Build**
+
    ```bash
    npm run build
    ```
+
    - [ ] Build succeeds with no errors
    - [ ] TypeScript types validate
 
 3. **Restart Server**
+
    ```bash
    # Kill previous server (Ctrl+C)
    bin/nmea-from-file
    ```
+
    - [ ] Server starts without errors
    - [ ] No warnings in startup logs
    - [ ] TSOA routes registered successfully
@@ -150,6 +163,7 @@ npm run watch
    - [ ] Delta throughput maintained
 
 6. **Commit**
+
    ```bash
    git add <files>
    git commit -m "feat: add <specific change>
@@ -164,17 +178,21 @@ npm run watch
 **After Implementation Complete:**
 
 1. **Run Unit Tests**
+
    ```bash
    npm run test-only
    ```
+
    - [ ] All existing tests pass
    - [ ] New tests added for new functionality
    - [ ] Test coverage maintained/improved
 
 2. **Run Full Test Suite**
+
    ```bash
    npm test
    ```
+
    - [ ] Build succeeds
    - [ ] All tests pass
    - [ ] Linting passes
@@ -189,6 +207,7 @@ npm run watch
 **Complete System Test:**
 
 1. **Restart with Fresh State**
+
    ```bash
    # Stop server
    # Clear any test data
@@ -223,6 +242,7 @@ npm run watch
    - [ ] README updated (if needed)
 
 2. **Create Pull Request**
+
    ```bash
    git push origin feature/your-feature-name
    gh pr create --title "feat: Your feature title" \
@@ -253,6 +273,7 @@ npm run watch
 ## Quick Reference Commands
 
 ### Server Management
+
 ```bash
 # Start with NMEA sample data
 bin/nmea-from-file
@@ -268,6 +289,7 @@ tail -f ~/.signalk/*.log
 ```
 
 ### Build & Test
+
 ```bash
 # Build everything
 npm run build:all
@@ -289,6 +311,7 @@ npm run format
 ```
 
 ### Git Workflow
+
 ```bash
 # Create feature branch
 git checkout -b feature/my-feature
@@ -309,6 +332,7 @@ gh pr create
 ### Chrome DevTools Validation
 
 **Using MCP Tools:**
+
 - `mcp__chrome-devtools__navigate_page` - Navigate to URL
 - `mcp__chrome-devtools__take_screenshot` - Capture visual state
 - `mcp__chrome-devtools__take_snapshot` - Get accessibility tree
@@ -344,25 +368,35 @@ After each code modification:
 ```javascript
 // Chrome MCP: evaluate_script
 // Test live data updates - MUST show timestamps changing
-() => {
-  return new Promise(resolve => {
-    const initialTimestamps = Array.from(document.querySelectorAll('.timestamp-cell'))
+;() => {
+  return new Promise((resolve) => {
+    const initialTimestamps = Array.from(
+      document.querySelectorAll('.timestamp-cell')
+    )
       .slice(1, 6)
-      .map(td => td.textContent.trim())
+      .map((td) => td.textContent.trim())
 
     setTimeout(() => {
-      const afterTimestamps = Array.from(document.querySelectorAll('.timestamp-cell'))
+      const afterTimestamps = Array.from(
+        document.querySelectorAll('.timestamp-cell')
+      )
         .slice(1, 6)
-        .map(td => td.textContent.trim())
+        .map((td) => td.textContent.trim())
 
-      const changed = initialTimestamps.some((ts, i) => ts !== afterTimestamps[i])
+      const changed = initialTimestamps.some(
+        (ts, i) => ts !== afterTimestamps[i]
+      )
 
       resolve({
         initialTimestamps,
         afterTimestamps,
         timestampsChanged: changed,
-        changedCount: initialTimestamps.filter((ts, i) => ts !== afterTimestamps[i]).length,
-        message: changed ? '✓ Data updating live' : '✗ No updates - RESTART SERVER'
+        changedCount: initialTimestamps.filter(
+          (ts, i) => ts !== afterTimestamps[i]
+        ).length,
+        message: changed
+          ? '✓ Data updating live'
+          : '✗ No updates - RESTART SERVER'
       })
     }, 2000)
   })
@@ -376,13 +410,17 @@ After each code modification:
 ```javascript
 // Chrome MCP: evaluate_script
 // Capture performance metrics for benchmark tracking
-() => ({
+;() => ({
   totalPageNodes: document.querySelectorAll('*').length,
   tableRows: document.querySelectorAll('table tbody tr').length,
-  memory: performance.memory ? {
-    usedJSHeapSize: Math.round(performance.memory.usedJSHeapSize / 1024 / 1024) + ' MB',
-    totalJSHeapSize: Math.round(performance.memory.totalJSHeapSize / 1024 / 1024) + ' MB'
-  } : 'Not available'
+  memory: performance.memory
+    ? {
+        usedJSHeapSize:
+          Math.round(performance.memory.usedJSHeapSize / 1024 / 1024) + ' MB',
+        totalJSHeapSize:
+          Math.round(performance.memory.totalJSHeapSize / 1024 / 1024) + ' MB'
+      }
+    : 'Not available'
 })
 ```
 
@@ -400,9 +438,11 @@ Compare screenshots to ensure visual parity.
 ## Common Validation Checkpoints
 
 ### Dashboard Health Check
+
 Navigate to: http://localhost:3000/admin/#/dashboard
 
 Expected Stats:
+
 - **Delta throughput**: > 20/second (with sample data)
 - **Signal K Paths**: ~56 paths
 - **WebSocket Clients**: ≥ 1
@@ -410,9 +450,11 @@ Expected Stats:
 - **Plugin Status**: All "Started" (green)
 
 ### Data Browser Validation
+
 Navigate to: http://localhost:3000/admin/#/databrowser
 
 Verify:
+
 - Live data updating (timestamps current)
 - Values realistic:
   - Wind speed: ~4-8 m/s
@@ -421,7 +463,9 @@ Verify:
   - Speed: ~3 m/s
 
 ### Performance Baseline
+
 Expected Metrics:
+
 - **CLS**: < 0.1 (0.00 is ideal)
 - **Page Load**: < 3 seconds
 - **FPS**: 60fps during interactions
@@ -430,18 +474,21 @@ Expected Metrics:
 ## Troubleshooting
 
 ### Server Won't Start
+
 1. Check if port 3000 is in use: `lsof -i :3000`
 2. Check build succeeded: `ls -la dist/`
 3. Check node version: `node --version` (should be 20+)
 4. View startup errors in console
 
 ### Tests Failing
+
 1. Rebuild: `npm run build`
 2. Check TypeScript errors: `tsc --noEmit`
 3. Run single test: `npm run test-only -- --grep "test name"`
 4. Clear and reinstall: `rm -rf node_modules && npm install`
 
 ### Visual Changes Not Appearing
+
 1. Hard refresh browser: Cmd+Shift+R
 2. Clear browser cache
 3. Check browser console for errors
@@ -449,6 +496,7 @@ Expected Metrics:
 5. Restart server to pick up changes
 
 ### Performance Degradation
+
 1. Check delta throughput hasn't dropped
 2. Run performance trace before/after changes
 3. Check for memory leaks (increasing memory over time)

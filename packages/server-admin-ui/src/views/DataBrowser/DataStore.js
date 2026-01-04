@@ -81,7 +81,7 @@ class DataStore {
    * Call this when DataBrowser component unmounts
    */
   destroy() {
-    this.subjects.forEach(subject => subject.complete())
+    this.subjects.forEach((subject) => subject.complete())
     this.subjects.clear()
   }
 }
