@@ -55,7 +55,87 @@ function fetchSources() {
     })
 }
 
-// Memoized DataRow component - only re-renders when data changes
+// PathCell - static, never changes (Step 8a)
+const PathCell = React.memo(({ path }) => (
+  <td className="path-cell">
+    <CopyToClipboardWithFade text={path}>
+      <span>
+        {path} <i className="far fa-copy"></i>
+      </span>
+    </CopyToClipboardWithFade>
+  </td>
+))
+
+// ValueCell - changes on delta, renders value (Step 8a)
+const ValueCell = React.memo(({ value, units, raw, meta, path }) => (
+  <td className="value-cell">
+    {(() => {
+      if (raw) {
+        return (
+          <div>
+            <div className="text-primary">
+              value:{' '}
+              {JSON.stringify(value, null, 2)}
+            </div>
+            <div className="text-primary">
+              meta:{' '}
+              {JSON.stringify(
+                meta ? meta : {},
+                null,
+                2
+              )}
+            </div>
+          </div>
+        )
+      }
+      const CustomRenderer = getValueRenderer(path, meta)
+      if (CustomRenderer) {
+        return (
+          <CustomRenderer
+            value={value}
+            units={units}
+            {...meta?.renderer?.options}
+          />
+        )
+      }
+      return (
+        <DefaultValueRenderer
+          value={value}
+          units={units}
+        />
+      )
+    })()}
+  </td>
+), (prevProps, nextProps) => {
+  // Only re-render if value or raw mode changed
+  return prevProps.value === nextProps.value && prevProps.raw === nextProps.raw
+})
+
+// SourceCell - static except when checkbox toggled (Step 8a)
+const SourceCell = React.memo(({ source, pgn, sentence, selectedSources, onToggleSource }) => (
+  <td className="source-cell">
+    <input
+      type="checkbox"
+      onChange={() => onToggleSource(source)}
+      checked={selectedSources.has(source)}
+      style={{
+        marginRight: '5px',
+        verticalAlign: 'middle'
+      }}
+    />
+    <CopyToClipboardWithFade text={source}>
+      {source} <i className="far fa-copy"></i>
+    </CopyToClipboardWithFade>{' '}
+    {pgn || ''}
+    {sentence || ''}
+  </td>
+), (prevProps, nextProps) => {
+  // Only re-render if source or checkbox state changed
+  return prevProps.source === nextProps.source &&
+         prevProps.selectedSources === nextProps.selectedSources
+})
+
+// Memoized DataRow component - composed of memoized cells (Step 8a complete)
 const DataRow = React.memo(({
   pathKey,
   data,
@@ -69,75 +149,26 @@ const DataRow = React.memo(({
 
   return (
     <tr key={pathKey}>
-      <td className="path-cell">
-        <CopyToClipboardWithFade text={data.path}>
-          <span>
-            {data.path} <i className="far fa-copy"></i>
-          </span>
-        </CopyToClipboardWithFade>
-      </td>
-      <td className="value-cell">
-        {(() => {
-          if (raw) {
-            return (
-              <div>
-                <div className="text-primary">
-                  value:{' '}
-                  {JSON.stringify(data.value, null, 2)}
-                </div>
-                <div className="text-primary">
-                  meta:{' '}
-                  {JSON.stringify(
-                    meta ? meta : {},
-                    null,
-                    2
-                  )}
-                </div>
-              </div>
-            )
-          }
-          const CustomRenderer = getValueRenderer(
-            data.path,
-            meta
-          )
-          if (CustomRenderer) {
-            return (
-              <CustomRenderer
-                value={data.value}
-                units={units}
-                {...meta?.renderer?.options}
-              />
-            )
-          }
-          return (
-            <DefaultValueRenderer
-              value={data.value}
-              units={units}
-            />
-          )
-        })()}
-      </td>
+      <PathCell path={data.path} />
+      <ValueCell
+        value={data.value}
+        units={units}
+        raw={raw}
+        meta={meta}
+        path={data.path}
+      />
       <TimestampCell
         timestamp={data.timestamp}
         isPaused={isPaused}
         className="timestamp-cell"
       />
-      <td className="source-cell">
-        <input
-          type="checkbox"
-          onChange={() => onToggleSource(data.$source)}
-          checked={selectedSources.has(data.$source)}
-          style={{
-            marginRight: '5px',
-            verticalAlign: 'middle'
-          }}
-        />
-        <CopyToClipboardWithFade text={data.$source}>
-          {data.$source} <i className="far fa-copy"></i>
-        </CopyToClipboardWithFade>{' '}
-        {data.pgn || ''}
-        {data.sentence || ''}
-      </td>
+      <SourceCell
+        source={data.$source}
+        pgn={data.pgn}
+        sentence={data.sentence}
+        selectedSources={selectedSources}
+        onToggleSource={onToggleSource}
+      />
     </tr>
   )
 }, (prevProps, nextProps) => {
