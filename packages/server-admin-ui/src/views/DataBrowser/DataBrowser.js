@@ -66,9 +66,9 @@ const PathCell = React.memo(({ path }) => (
   </td>
 ))
 
-// ValueCell - subscribes directly to RxJS (Step 8b)
-const ValueCell = ({ context, pathKey, raw, meta, path }) => {
-  const [data, setData] = React.useState(null)
+// ValueCell - uses initial data + RxJS subscriptions for updates (Step 8b)
+const ValueCell = ({ context, pathKey, raw, meta, path, initialData }) => {
+  const [data, setData] = React.useState(initialData || null)
 
   React.useEffect(() => {
     const subscription = dataStore
@@ -151,7 +151,7 @@ const SourceCell = React.memo(({ source, pgn, sentence, selectedSources, onToggl
          prevProps.selectedSources === nextProps.selectedSources
 })
 
-// DataRow - completely static shell for cell components (Step 8b)
+// DataRow - static shell that passes initial data to cells (Step 8b)
 const DataRow = React.memo(({
   context,
   pathKey,
@@ -163,10 +163,11 @@ const DataRow = React.memo(({
   raw,
   isPaused,
   selectedSources,
-  onToggleSource
+  onToggleSource,
+  initialData
 }) => {
-  // NO useState - NO data prop - just a static shell
-  // Cells subscribe directly to RxJS for live updates
+  // Passes initial data from state to cells
+  // Cells use RxJS subscriptions for live updates
 
   return (
     <tr>
@@ -177,12 +178,14 @@ const DataRow = React.memo(({
         path={path}
         meta={meta}
         raw={raw}
+        initialData={initialData}
       />
       <TimestampCell
         context={context}
         pathKey={pathKey}
         isPaused={isPaused}
         className="timestamp-cell"
+        initialTimestamp={initialData?.timestamp}
       />
       <SourceCell
         source={source}
@@ -294,6 +297,7 @@ const DataTable = ({
               isPaused={pause}
               selectedSources={selectedSources}
               onToggleSource={toggleSourceSelection}
+              initialData={rowData}
             />
           )
         })}
@@ -943,9 +947,9 @@ class DataBrowser extends Component {
   }
 }
 
-// TimestampCell - subscribes directly to RxJS with animation (Step 8b)
-const TimestampCell = ({ context, pathKey, isPaused, className }) => {
-  const [timestamp, setTimestamp] = React.useState(null)
+// TimestampCell - uses initial timestamp + RxJS subscriptions for updates (Step 8b)
+const TimestampCell = ({ context, pathKey, isPaused, className, initialTimestamp }) => {
+  const [timestamp, setTimestamp] = React.useState(initialTimestamp || null)
   const [isUpdated, setIsUpdated] = React.useState(false)
   const [animationKey, setAnimationKey] = React.useState(0)
   const timeoutRef = React.useRef(null)
