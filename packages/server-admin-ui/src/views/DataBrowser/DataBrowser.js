@@ -17,6 +17,7 @@ import moment from 'moment'
 import { CopyToClipboard } from 'react-copy-to-clipboard'
 import Meta from './Meta'
 import { getValueRenderer, DefaultValueRenderer } from './ValueRenderers'
+import { dataStore } from './DataStore'
 
 const TIMESTAMP_FORMAT = 'MM/DD HH:mm:ss'
 const TIME_ONLY_FORMAT = 'HH:mm:ss'
@@ -52,6 +53,252 @@ function fetchSources() {
       })
       this.setState({ ...this.state, sources: sources })
     })
+}
+
+// PathCell - static, never changes (Step 8a)
+const PathCell = React.memo(({ path }) => (
+  <td className="path-cell">
+    <CopyToClipboardWithFade text={path}>
+      <span>
+        {path} <i className="far fa-copy"></i>
+      </span>
+    </CopyToClipboardWithFade>
+  </td>
+))
+PathCell.displayName = 'PathCell'
+
+// ValueCell - uses initial data + RxJS subscriptions for updates (Step 8b)
+const ValueCell = ({ context, pathKey, raw, meta, path, initialData }) => {
+  const [data, setData] = React.useState(initialData || null)
+
+  React.useEffect(() => {
+    const subscription = dataStore
+      .getSubject(context, pathKey)
+      .subscribe((newData) => {
+        setData(newData)
+      })
+
+    return () => subscription.unsubscribe()
+  }, [context, pathKey])
+
+  if (!data) return <td className="value-cell">Loading...</td>
+
+  const units = meta?.units || ''
+
+  return (
+    <td className="value-cell">
+      {(() => {
+        if (raw) {
+          return (
+            <div>
+              <div className="text-primary">
+                value: {JSON.stringify(data.value, null, 2)}
+              </div>
+              <div className="text-primary">
+                meta: {JSON.stringify(meta ? meta : {}, null, 2)}
+              </div>
+            </div>
+          )
+        }
+        const CustomRenderer = getValueRenderer(path, meta)
+        if (CustomRenderer) {
+          return (
+            <CustomRenderer
+              value={data.value}
+              units={units}
+              {...meta?.renderer?.options}
+            />
+          )
+        }
+        return <DefaultValueRenderer value={data.value} units={units} />
+      })()}
+    </td>
+  )
+}
+ValueCell.displayName = 'ValueCell'
+// NO React.memo - component manages its own subscription
+
+// SourceCell - static except when checkbox toggled (Step 8a)
+const SourceCell = React.memo(
+  ({ source, pgn, sentence, selectedSources, onToggleSource }) => (
+    <td className="source-cell">
+      <input
+        type="checkbox"
+        onChange={() => onToggleSource(source)}
+        checked={selectedSources.has(source)}
+        style={{
+          marginRight: '5px',
+          verticalAlign: 'middle'
+        }}
+      />
+      <CopyToClipboardWithFade text={source}>
+        {source} <i className="far fa-copy"></i>
+      </CopyToClipboardWithFade>{' '}
+      {pgn || ''}
+      {sentence || ''}
+    </td>
+  ),
+  (prevProps, nextProps) => {
+    // Only re-render if source or checkbox state changed
+    return (
+      prevProps.source === nextProps.source &&
+      prevProps.selectedSources === nextProps.selectedSources
+    )
+  }
+)
+SourceCell.displayName = 'SourceCell'
+
+// DataRow - static shell that passes initial data to cells (Step 8b)
+const DataRow = React.memo(
+  ({
+    context,
+    pathKey,
+    path,
+    source,
+    pgn,
+    sentence,
+    meta,
+    raw,
+    isPaused,
+    selectedSources,
+    onToggleSource,
+    initialData
+  }) => {
+    // Passes initial data from state to cells
+    // Cells use RxJS subscriptions for live updates
+
+    return (
+      <tr>
+        <PathCell path={path} />
+        <ValueCell
+          context={context}
+          pathKey={pathKey}
+          path={path}
+          meta={meta}
+          raw={raw}
+          initialData={initialData}
+        />
+        <TimestampCell
+          context={context}
+          pathKey={pathKey}
+          isPaused={isPaused}
+          className="timestamp-cell"
+          initialTimestamp={initialData?.timestamp}
+        />
+        <SourceCell
+          source={source}
+          pgn={pgn}
+          sentence={sentence}
+          selectedSources={selectedSources}
+          onToggleSource={onToggleSource}
+        />
+      </tr>
+    )
+  },
+  (prevProps, nextProps) => {
+    // Only re-render if static props change (search filter, source filter, pause toggle)
+    return (
+      prevProps.raw === nextProps.raw &&
+      prevProps.isPaused === nextProps.isPaused &&
+      prevProps.selectedSources === nextProps.selectedSources
+    )
+  }
+)
+DataRow.displayName = 'DataRow'
+
+// Memoized DataTable component - caches filter/sort operations (Step 8b)
+const DataTable = ({
+  data,
+  meta,
+  context,
+  search,
+  raw,
+  pause,
+  selectedSources,
+  sourceFilterActive,
+  toggleSourceFilter,
+  toggleSourceSelection
+}) => {
+  // Memoize the filter and sort operations - only recalculate when dependencies change
+  const filteredSortedKeys = React.useMemo(() => {
+    return Object.keys(data || {})
+      .filter((key) => {
+        const rowData = data[key]
+
+        // Search filter
+        const pathMatches =
+          !search ||
+          search.length === 0 ||
+          key.toLowerCase().indexOf(search.toLowerCase()) !== -1
+        if (!pathMatches) {
+          return false
+        }
+
+        // Source filter
+        if (sourceFilterActive && selectedSources.size > 0) {
+          return selectedSources.has(rowData.$source)
+        }
+
+        return true
+      })
+      .sort()
+  }, [data, search, sourceFilterActive, selectedSources])
+
+  return (
+    <Table responsive bordered striped size="sm" className="responsive-table">
+      <thead>
+        <tr>
+          <th className="path-cell">Path</th>
+          <th className="value-cell">Value</th>
+          <th className="timestamp-cell">Timestamp</th>
+          <th className="source-cell">
+            <input
+              type="checkbox"
+              onChange={toggleSourceFilter}
+              checked={sourceFilterActive}
+              disabled={selectedSources.size === 0}
+              title={
+                selectedSources.size === 0
+                  ? 'Check a source in the list to filter by source'
+                  : sourceFilterActive
+                    ? 'Uncheck to deactivate source filtering'
+                    : 'Check to activate source filtering'
+              }
+              style={{
+                marginRight: '5px',
+                verticalAlign: 'middle'
+              }}
+            />
+            Source
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {filteredSortedKeys.map((key) => {
+          const rowData = data[key]
+          const rowMeta = meta[rowData.path]
+
+          return (
+            <DataRow
+              key={key}
+              context={context}
+              pathKey={key}
+              path={rowData.path}
+              source={rowData.$source}
+              pgn={rowData.pgn}
+              sentence={rowData.sentence}
+              meta={rowMeta}
+              raw={raw}
+              isPaused={pause}
+              selectedSources={selectedSources}
+              onToggleSource={toggleSourceSelection}
+              initialData={rowData}
+            />
+          )
+        })}
+      </tbody>
+    </Table>
+  )
 }
 
 class DataBrowser extends Component {
@@ -92,75 +339,83 @@ class DataBrowser extends Component {
     }
 
     if (msg.context && msg.updates) {
+      // ALWAYS push to RxJS for reactive cell subscriptions (Step 8b)
+      dataStore.pushDelta(msg)
+
       const key =
         msg.context === this.state.webSocket.skSelf ? 'self' : msg.context
 
-      let isNew = false
-      if (!this.state.data[key]) {
-        this.state.data[key] = {}
-        isNew = true
-      }
+      // Keep setState for backwards compatibility and initial data load
+      // Cell-level RxJS subscriptions are the real optimization
+      // Parent may re-render, but DataRow is memoized and cells manage their own updates
+      this.setState((prevState) => {
+        const newDataForContext = { ...(prevState.data[key] || {}) }
+        const newMetaForContext = { ...(prevState.meta[key] || {}) }
 
-      if (!this.state.meta[key]) {
-        this.state.meta[key] = {}
-        isNew = true
-      }
+        msg.updates.forEach((update) => {
+          if (update.values) {
+            const pgn =
+              update.source && update.source.pgn && `(${update.source.pgn})`
+            const sentence =
+              update.source &&
+              update.source.sentence &&
+              `(${update.source.sentence})`
 
-      let context = this.state.data[key]
-      let contextMeta = this.state.meta[key]
+            update.values.forEach((vp) => {
+              const timestamp = moment(update.timestamp)
+              const formattedTimestamp = timestamp.isSame(moment(), 'day')
+                ? timestamp.format(TIME_ONLY_FORMAT)
+                : timestamp.format(TIMESTAMP_FORMAT)
 
-      msg.updates.forEach((update) => {
-        if (update.values) {
-          let pgn =
-            update.source && update.source.pgn && `(${update.source.pgn})`
-          let sentence =
-            update.source &&
-            update.source.sentence &&
-            `(${update.source.sentence})`
-          update.values.forEach((vp) => {
-            const timestamp = moment(update.timestamp)
-            const formattedTimestamp = timestamp.isSame(moment(), 'day')
-              ? timestamp.format(TIME_ONLY_FORMAT)
-              : timestamp.format(TIMESTAMP_FORMAT)
-
-            if (vp.path === '') {
-              Object.keys(vp.value).forEach((k) => {
-                context[k] = {
-                  path: k,
-                  value: vp.value[k],
+              if (vp.path === '') {
+                // Empty path - spread object keys
+                Object.keys(vp.value).forEach((k) => {
+                  newDataForContext[k] = {
+                    path: k,
+                    value: vp.value[k],
+                    $source: update.$source,
+                    pgn,
+                    sentence,
+                    timestamp: formattedTimestamp
+                  }
+                })
+              } else {
+                // Normal path
+                const pathKey = vp.path + '$' + update.$source
+                newDataForContext[pathKey] = {
+                  path: vp.path,
                   $source: update.$source,
+                  value: vp.value,
                   pgn,
                   sentence,
                   timestamp: formattedTimestamp
                 }
-              })
-            } else {
-              context[vp.path + '$' + update['$source']] = {
-                path: vp.path,
-                $source: update.$source,
-                value: vp.value,
-                pgn,
-                sentence,
-                timestamp: formattedTimestamp
               }
-            }
-          })
-        }
-        if (update.meta) {
-          update.meta.forEach((vp) => {
-            contextMeta[vp.path] = { ...contextMeta[vp.path], ...vp.value }
-          })
+            })
+          }
+
+          if (update.meta) {
+            update.meta.forEach((vp) => {
+              newMetaForContext[vp.path] = {
+                ...newMetaForContext[vp.path],
+                ...vp.value
+              }
+            })
+          }
+        })
+
+        return {
+          hasData: true,
+          data: {
+            ...prevState.data,
+            [key]: newDataForContext
+          },
+          meta: {
+            ...prevState.meta,
+            [key]: newMetaForContext
+          }
         }
       })
-
-      if (isNew || (this.state.context && this.state.context === key)) {
-        this.setState({
-          ...this.state,
-          hasData: true,
-          data: this.state.data,
-          meta: this.state.meta
-        })
-      }
     }
   }
 
@@ -215,6 +470,8 @@ class DataBrowser extends Component {
 
   componentWillUnmount() {
     this.unsubscribeToData()
+    // Cleanup DataStore subscriptions to prevent memory leaks
+    dataStore.destroy()
   }
 
   handleContextChange(selectedOption) {
@@ -600,152 +857,22 @@ class DataBrowser extends Component {
               {!this.state.includeMeta &&
                 this.state.context &&
                 this.state.context !== 'none' && (
-                  <Table
-                    responsive
-                    bordered
-                    striped
-                    size="sm"
-                    className="responsive-table"
-                  >
-                    <thead>
-                      <tr>
-                        <th className="path-cell">Path</th>
-                        <th className="value-cell">Value</th>
-                        <th className="timestamp-cell">Timestamp</th>
-                        <th className="source-cell">
-                          <input
-                            type="checkbox"
-                            onChange={this.toggleSourceFilter}
-                            checked={this.state.sourceFilterActive}
-                            disabled={this.state.selectedSources.size === 0}
-                            title={
-                              this.state.selectedSources.size === 0
-                                ? 'Check a source in the list to filter by source'
-                                : this.state.sourceFilterActive
-                                  ? 'Uncheck to deactivate source filtering'
-                                  : 'Check to activate source filtering'
-                            }
-                            style={{
-                              marginRight: '5px',
-                              verticalAlign: 'middle'
-                            }}
-                          />
-                          Source
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {Object.keys(this.state.data[this.state.context] || {})
-                        .filter((key) => {
-                          const data = this.state.data[this.state.context][key]
-
-                          const pathMatches =
-                            !this.state.search ||
-                            this.state.search.length === 0 ||
-                            key
-                              .toLowerCase()
-                              .indexOf(this.state.search.toLowerCase()) !== -1
-                          if (!pathMatches) {
-                            return false
-                          }
-
-                          // If source filter is active, also check source selection
-                          if (
-                            this.state.sourceFilterActive &&
-                            this.state.selectedSources.size > 0
-                          ) {
-                            return this.state.selectedSources.has(data.$source)
-                          }
-
-                          return true
-                        })
-                        .sort()
-                        .map((key) => {
-                          const data = this.state.data[this.state.context][key]
-                          const meta =
-                            this.state.meta[this.state.context][data.path]
-                          const units = meta && meta.units ? meta.units : ''
-
-                          return (
-                            <tr key={key}>
-                              <td className="path-cell">
-                                <CopyToClipboardWithFade text={data.path}>
-                                  <span>
-                                    {data.path} <i className="far fa-copy"></i>
-                                  </span>
-                                </CopyToClipboardWithFade>
-                              </td>
-                              <td className="value-cell">
-                                {(() => {
-                                  if (this.state.raw) {
-                                    return (
-                                      <div>
-                                        <div className="text-primary">
-                                          value:{' '}
-                                          {JSON.stringify(data.value, null, 2)}
-                                        </div>
-                                        <div className="text-primary">
-                                          meta:{' '}
-                                          {JSON.stringify(
-                                            meta ? meta : {},
-                                            null,
-                                            2
-                                          )}
-                                        </div>
-                                      </div>
-                                    )
-                                  }
-                                  const CustomRenderer = getValueRenderer(
-                                    data.path,
-                                    meta
-                                  )
-                                  if (CustomRenderer) {
-                                    return (
-                                      <CustomRenderer
-                                        value={data.value}
-                                        units={units}
-                                        {...meta?.renderer?.options}
-                                      />
-                                    )
-                                  }
-                                  return (
-                                    <DefaultValueRenderer
-                                      value={data.value}
-                                      units={units}
-                                    />
-                                  )
-                                })()}
-                              </td>
-                              <TimestampCell
-                                timestamp={data.timestamp}
-                                isPaused={this.state.pause}
-                                className="timestamp-cell"
-                              />
-                              <td className="source-cell">
-                                <input
-                                  type="checkbox"
-                                  onChange={() =>
-                                    this.toggleSourceSelection(data.$source)
-                                  }
-                                  checked={this.state.selectedSources.has(
-                                    data.$source
-                                  )}
-                                  style={{
-                                    marginRight: '5px',
-                                    verticalAlign: 'middle'
-                                  }}
-                                />
-                                <CopyToClipboardWithFade text={data.$source}>
-                                  {data.$source} <i className="far fa-copy"></i>
-                                </CopyToClipboardWithFade>{' '}
-                                {data.pgn || ''}
-                                {data.sentence || ''}
-                              </td>
-                            </tr>
-                          )
-                        })}
-                    </tbody>
-                  </Table>
+                  <DataTable
+                    data={this.state.data[this.state.context] || {}}
+                    meta={this.state.meta[this.state.context] || {}}
+                    context={
+                      this.state.context === this.props.webSocket?.skSelf
+                        ? 'self'
+                        : this.state.context
+                    }
+                    search={this.state.search}
+                    raw={this.state.raw}
+                    pause={this.state.pause}
+                    selectedSources={this.state.selectedSources}
+                    sourceFilterActive={this.state.sourceFilterActive}
+                    toggleSourceFilter={this.toggleSourceFilter}
+                    toggleSourceSelection={this.toggleSourceSelection}
+                  />
                 )}
 
               {this.state.includeMeta &&
@@ -815,62 +942,69 @@ class DataBrowser extends Component {
   }
 }
 
-class TimestampCell extends Component {
-  constructor(props) {
-    super(props)
-    this.state = {
-      isUpdated: false,
-      animationKey: 0
-    }
-    this.timeoutId = null
-  }
+// TimestampCell - uses initial timestamp + RxJS subscriptions for updates (Step 8b)
+const TimestampCell = ({
+  context,
+  pathKey,
+  isPaused,
+  className,
+  initialTimestamp
+}) => {
+  const [timestamp, setTimestamp] = React.useState(initialTimestamp || null)
+  const [isUpdated, setIsUpdated] = React.useState(false)
+  const [animationKey, setAnimationKey] = React.useState(0)
+  const timeoutRef = React.useRef(null)
 
-  componentDidUpdate(prevProps) {
-    if (prevProps.timestamp !== this.props.timestamp) {
-      if (this.timeoutId) {
-        clearTimeout(this.timeoutId)
-      }
+  React.useEffect(() => {
+    const subscription = dataStore
+      .getSubject(context, pathKey)
+      .subscribe((data) => {
+        setTimestamp(data.timestamp)
 
-      this.setState((state) => ({
-        isUpdated: true,
-        animationKey: state.animationKey + 1
-      }))
-
-      this.timeoutId = setTimeout(() => {
-        if (!this.props.isPaused) {
-          this.setState({ isUpdated: false })
+        // Trigger animation
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current)
         }
-      }, 15000)
-    }
-  }
 
-  componentDidMount() {
-    if (this.props.isPaused) {
-      this.setState({ isUpdated: false })
-    }
-  }
+        setIsUpdated(true)
+        setAnimationKey((prev) => prev + 1)
 
-  componentWillUnmount() {
-    if (this.timeoutId) {
-      clearTimeout(this.timeoutId)
-    }
-  }
+        timeoutRef.current = setTimeout(() => {
+          if (!isPaused) {
+            setIsUpdated(false)
+          }
+        }, 15000)
+      })
 
-  render() {
-    return (
-      <td
-        className={`${this.props.className || ''} ${
-          this.state.isUpdated && !this.props.isPaused
-            ? 'timestamp-updated'
-            : ''
-        }`}
-        key={this.state.animationKey}
-      >
-        {this.props.timestamp}
-      </td>
-    )
-  }
+    return () => {
+      subscription.unsubscribe()
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
+    }
+  }, [context, pathKey, isPaused])
+
+  React.useEffect(() => {
+    if (isPaused) {
+      setIsUpdated(false)
+    }
+  }, [isPaused])
+
+  if (!timestamp)
+    return <td className={className || 'timestamp-cell'}>--:--:--</td>
+
+  return (
+    <td
+      className={`${className || ''} ${
+        isUpdated && !isPaused ? 'timestamp-updated' : ''
+      }`}
+      key={animationKey}
+    >
+      {timestamp}
+    </td>
+  )
 }
+// NO React.memo - component manages its own subscription
 
 class CopyToClipboardWithFade extends Component {
   constructor() {
