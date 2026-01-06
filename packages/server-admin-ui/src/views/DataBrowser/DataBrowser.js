@@ -55,7 +55,7 @@ function fetchSources() {
     })
 }
 
-// PathCell - static, never changes (Step 8a)
+// PathCell - static, never changes
 const PathCell = React.memo(({ path }) => (
   <td className="path-cell">
     <CopyToClipboardWithFade text={path}>
@@ -67,7 +67,7 @@ const PathCell = React.memo(({ path }) => (
 ))
 PathCell.displayName = 'PathCell'
 
-// ValueCell - uses initial data + RxJS subscriptions for updates (Step 8b)
+// ValueCell - uses initial data + native pub/sub subscriptions for updates
 const ValueCell = ({ context, pathKey, raw, meta, path, initialData }) => {
   const [data, setData] = React.useState(initialData || null)
 
@@ -118,7 +118,7 @@ const ValueCell = ({ context, pathKey, raw, meta, path, initialData }) => {
 ValueCell.displayName = 'ValueCell'
 // NO React.memo - component manages its own subscription
 
-// SourceCell - static except when checkbox toggled (Step 8a)
+// SourceCell - static except when checkbox toggled
 const SourceCell = React.memo(
   ({ source, pgn, sentence, selectedSources, onToggleSource }) => (
     <td className="source-cell">
@@ -148,7 +148,7 @@ const SourceCell = React.memo(
 )
 SourceCell.displayName = 'SourceCell'
 
-// DataRow - static shell that passes initial data to cells (Step 8b)
+// DataRow - static shell that passes initial data to cells
 const DataRow = React.memo(
   ({
     context,
@@ -165,7 +165,7 @@ const DataRow = React.memo(
     initialData
   }) => {
     // Passes initial data from state to cells
-    // Cells use RxJS subscriptions for live updates
+    // Cells use native pub/sub subscriptions for live updates
 
     return (
       <tr>
@@ -206,7 +206,7 @@ const DataRow = React.memo(
 )
 DataRow.displayName = 'DataRow'
 
-// Memoized DataTable component - caches filter/sort operations (Step 8b)
+// Memoized DataTable component - caches filter/sort operations
 const DataTable = ({
   data,
   meta,
@@ -339,14 +339,14 @@ class DataBrowser extends Component {
     }
 
     if (msg.context && msg.updates) {
-      // ALWAYS push to RxJS for reactive cell subscriptions (Step 8b)
+      // Push delta to DataStore for reactive cell subscriptions
       dataStore.pushDelta(msg)
 
       const key =
         msg.context === this.state.webSocket.skSelf ? 'self' : msg.context
 
       // Keep setState for backwards compatibility and initial data load
-      // Cell-level RxJS subscriptions are the real optimization
+      // Cell-level subscriptions handle live updates efficiently
       // Parent may re-render, but DataRow is memoized and cells manage their own updates
       this.setState((prevState) => {
         const newDataForContext = { ...(prevState.data[key] || {}) }
@@ -942,7 +942,7 @@ class DataBrowser extends Component {
   }
 }
 
-// TimestampCell - uses initial timestamp + RxJS subscriptions for updates (Step 8b)
+// TimestampCell - uses initial timestamp + native pub/sub subscriptions for updates
 const TimestampCell = ({
   context,
   pathKey,
