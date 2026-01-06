@@ -1,36 +1,68 @@
-import { Subject } from 'rxjs'
 import moment from 'moment'
 
 const TIME_ONLY_FORMAT = 'HH:mm:ss'
 const TIMESTAMP_FORMAT = 'MMM DD HH:mm:ss'
 
 /**
- * DataStore manages per-path RxJS Subjects for reactive data updates.
- * Mirrors the pattern from server's src/streambundle.ts but uses RxJS instead of BaconJS.
+ * DataStore manages per-path native pub/sub for reactive data updates.
+ * Mirrors the pattern from server's src/streambundle.ts but uses native JavaScript instead of RxJS.
  *
  * Pattern:
- * - WebSocket delta arrives → pushDelta() → push to relevant Subjects
- * - Each cell subscribes to its Subject → receives future updates
+ * - WebSocket delta arrives → pushDelta() → emit to relevant listeners
+ * - Each cell subscribes to its path → receives future updates
  * - Parent component doesn't re-render on deltas
  */
 class DataStore {
   constructor() {
-    this.subjects = new Map() // Map<string, Subject> - key format: "context:pathKey"
+    this.listeners = new Map() // Map<string, Set<callback>> - key format: "context:pathKey"
   }
 
   /**
-   * Get or create a Subject for a specific context:pathKey combination
+   * Get or create a Subject-like API for a specific context:pathKey combination
    * @param {string} context - Either 'self' or full context path
    * @param {string} pathKey - Format: "path$source" (e.g., "environment.temperature$nmeaFromFile.II")
-   * @returns {Subject} RxJS Subject for this specific data stream
+   * @returns {Object} Subject-like object with subscribe() and next() methods
    */
   getSubject(context, pathKey) {
     const key = `${context}:${pathKey}`
 
-    if (!this.subjects.has(key)) {
-      this.subjects.set(key, new Subject())
+    // Ensure listener Set exists
+    if (!this.listeners.has(key)) {
+      this.listeners.set(key, new Set())
     }
-    return this.subjects.get(key)
+
+    const listenerSet = this.listeners.get(key)
+
+    // Return Subject-like API for compatibility
+    return {
+      next: (data) => {
+        // Emit to all subscribers synchronously
+        listenerSet.forEach((callback) => callback(data))
+      },
+
+      subscribe: (callback) => {
+        // Add callback to Set
+        listenerSet.add(callback)
+
+        // Return Subscription-like API
+        return {
+          unsubscribe: () => {
+            listenerSet.delete(callback)
+
+            // Cleanup empty Sets to prevent memory leaks
+            if (listenerSet.size === 0) {
+              this.listeners.delete(key)
+            }
+          }
+        }
+      },
+
+      complete: () => {
+        // Clear all listeners for this key
+        listenerSet.clear()
+        this.listeners.delete(key)
+      }
+    }
   }
 
   /**
@@ -77,12 +109,12 @@ class DataStore {
   }
 
   /**
-   * Cleanup: complete all subjects to prevent memory leaks
+   * Cleanup: clear all listeners to prevent memory leaks
    * Call this when DataBrowser component unmounts
    */
   destroy() {
-    this.subjects.forEach((subject) => subject.complete())
-    this.subjects.clear()
+    this.listeners.forEach((listenerSet) => listenerSet.clear())
+    this.listeners.clear()
   }
 }
 
